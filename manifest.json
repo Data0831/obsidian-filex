@@ -1,0 +1,11 @@
+{
+	"id": "obsidian-filex",
+	"name": "FileX",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "an obsidian plugin to help you manage your files",
+	"author": "Data0831",
+	"authorUrl": "https://github.com/Data0831",
+	"fundingUrl": "https://obsidian.md/pricing",
+	"isDesktopOnly": false
+}
