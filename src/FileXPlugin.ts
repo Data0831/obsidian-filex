@@ -1,7 +1,7 @@
 import { Plugin } from 'obsidian';
 import { FileXSettings, DEFAULT_SETTINGS } from './FileXSettings';
 import { FileXSettingTab } from './FileXSettingTab';
-import registerCommands from './command';
+import registerCommands from './FileXcommand';
 
 
 import { FileXControlView, VIEW_TYPE_FILEX_CONTROL } from './FileXControlView';

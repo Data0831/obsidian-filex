@@ -185,6 +185,14 @@
             background-color: var(--background-modifier-hover);
             border-radius: 0.2rem;
         }
+
+        .tag-path-item {
+            color: var(--text-accent);
+            background-color: var(--background-modifier-hover);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
     }
 
     .file-list-container {
@@ -257,12 +265,6 @@
             margin-left: 0.5rem;
         }
 
-        .file-list-body .multi-select-pill-content span {
-            font-size: 0.65rem;
-            padding: 0.2rem;
-            margin: 0.2rem;
-        }
-
         .file-list-body tr input{
             -webkit-app-region: no-drag;
             background: var(--background-modifier-form-field);
@@ -280,7 +282,28 @@
 
     }
 
+    .tags-container {
+        margin-top: 16px;
+        background-color: var(--background-primary);
+        padding: 12px 16px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 
+        .multi-select-pill-content span {
+            font-size: 0.65rem;
+            padding: 0.2rem;
+            margin: 0.2rem;
+        }
+
+        .multi-select-pill.is-active {
+            background-color: var(--text-accent);
+            color: var(--text-on-accent);
+        }
+
+        .multi-select-pill.is-active:hover {
+            background-color: var(--text-accent-hover);
+        }
+    }
 
 }
 
