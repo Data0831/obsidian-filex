@@ -41,13 +41,13 @@ export class FileXControlView extends ItemView {
         this.setHtml();
         this.setHtmlIcon();
         this.initListeners();
-        this.segementClickHandler('vault');
+        this.segmentClickHandler('vault');
     }
 
     private initListeners() {
-        const setSegementClickListener = () => {
-            this.contentEl.querySelectorAll('.segement-button').forEach(button => {
-                button.addEventListener('click', () => this.segementClickHandler(button.id));
+        const setsegmentClickListener = () => {
+            this.contentEl.querySelectorAll('.segment-button').forEach(button => {
+                button.addEventListener('click', () => this.segmentClickHandler(button.id));
             });
         }
 
@@ -62,7 +62,7 @@ export class FileXControlView extends ItemView {
 
         const setRootFolderButtonClickListener = () => {
             this.contentEl.querySelector('.file-info-container span.filex-icon-folder')
-                ?.addEventListener('click', () => this.segementClickHandler('vault'));
+                ?.addEventListener('click', () => this.segmentClickHandler('vault'));
         }
 
         const setSortOrderClickListener = () => {
@@ -96,7 +96,7 @@ export class FileXControlView extends ItemView {
             });
         }
 
-        setSegementClickListener();
+        setsegmentClickListener();
         setRootFolderButtonClickListener();
         setSortOrderClickListener();
         setShowAttachmentsClickListener();
@@ -250,18 +250,18 @@ export class FileXControlView extends ItemView {
 
         const handlers: Record<string, () => void> = {
             'folder': () => this.buildTableByFolderPath(this.status.folderPath!),
-            'vault': () => this.segementClickHandler('vault'),
-            'folder-l2': () => this.segementClickHandler('folder-l2'),
-            'folder-l3': () => this.segementClickHandler('folder-l3'),
-            'tag': () => this.segementClickHandler('tag')
+            'vault': () => this.segmentClickHandler('vault'),
+            'folder-l2': () => this.segmentClickHandler('folder-l2'),
+            'folder-l3': () => this.segmentClickHandler('folder-l3'),
+            'tag': () => this.segmentClickHandler('tag')
         };
 
         const handler = handlers[this.status.type];
         if (handler) handler();
     }
 
-    segementClickHandler(tab: string) {
-        this.contentEl.querySelector('.segement-button.active')?.classList.remove('active');
+    segmentClickHandler(tab: string) {
+        this.contentEl.querySelector('.segment-button.active')?.classList.remove('active');
         this.contentEl.querySelector(`#${tab}`)?.classList.add('active');
 
         if (tab == 'vault') {
@@ -332,10 +332,10 @@ export class FileXControlView extends ItemView {
                 <div class="widget-container">
 
                     <div class="button-row">
-                        <button class="segement-button active" id="vault">Vault</button>
-                        <button class="segement-button" id="folder-l2">Folder L2</button>
-                        <button class="segement-button" id="folder-l3">Folder L3</button>
-                        <button class="segement-button" id="tag">Tag</button>
+                        <button class="segment-button active" id="vault">Vault</button>
+                        <button class="segment-button" id="folder-l2">Folder L2</button>
+                        <button class="segment-button" id="folder-l3">Folder L3</button>
+                        <button class="segment-button" id="tag">Tag</button>
 
                     </div>
                     <hr/>
