@@ -78,3 +78,47 @@ absolutePath 變成 "資料夾1/資料夾2/資料夾3/" (為下一次迭代更�
 希望這個更詳細的解釋能幫助你理解為什麼需要額外變數以及閉包在這種情況下的作用。 JavaScript 的閉包是一個比較容易混淆的概念，但理解它對於處理迴圈和事件監聽器等非同步操作非常重要。
 
 width: fit-content;
+
+在 TypeScript 中，`const` 和 `var as const` 之間有一些重要的區別。以下是它們的主要差異：
+
+### 1. `const`
+
+- **定義**：`const` 用於聲明一個常量，這意味著該變量的引用不能被重新賦值。
+- **可變性**：如果 `const` 用於對象或數組，對象的屬性或數組的元素仍然可以被修改，但變量本身的引用不能改變。
+- **類型推斷**：TypeScript 會根據賦值推斷變量的類型，但不會將其視為字面量類型。
+
+```typescript
+const myArray = [1, 2, 3];
+myArray.push(4); // 這是合法的
+// myArray = [5, 6]; // 這會導致錯誤，因為 myArray 是 const
+
+const myObject = { name: 'Alice' };
+myObject.name = 'Bob'; // 這是合法的
+// myObject = { name: 'Charlie' }; // 這會導致錯誤
+```
+
+### 2. `var as const`
+
+- **定義**：`as const` 是一個類型斷言，用於將對象或數組的類型設置為字面量類型，並使其屬性變為只讀。
+- **可變性**：使用 `as const` 的對象或數組的屬性將被視為只讀，這意味著它們的值不能被修改。
+- **類型推斷**：TypeScript 將對象或數組的屬性推斷為具體的字面量類型，而不是一般的類型。
+
+```typescript
+const myArray = [1, 2, 3] as const;
+// myArray.push(4); // 這會導致錯誤，因為 myArray 是只讀的
+
+const myObject = { name: 'Alice' } as const;
+// myObject.name = 'Bob'; // 這會導致錯誤，因為 name 是只讀的
+```
+
+### 總結
+
+- `const` 用於聲明常量，防止變量的引用被重新賦值，但對象的屬性仍然可以被修改。
+- `as const` 用於將對象或數組的類型設置為字面量類型，並使其屬性變為只讀，防止任何修改。
+
+這兩者的使用場景不同，根據需要選擇合適的方式來提高代碼的安全性和可維護性。
+
+as const
+
+
+arrow function 部會有 bind this 問題，但一般 function 會有 bind this 問題

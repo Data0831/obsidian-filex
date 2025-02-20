@@ -1,4 +1,4 @@
-import { ItemView, setIcon, WorkspaceLeaf, TFile, TFolder, Notice, Menu, TAbstractFile, getAllTags } from 'obsidian';
+import { ItemView, setIcon, WorkspaceLeaf, TFile, TFolder, Notice, TAbstractFile, getAllTags, App  } from 'obsidian';
 import { FileAPI } from './FileAPI';
 import FileXPlugin from '../main';
 import * as YAML from 'yaml';
@@ -6,11 +6,6 @@ import { FileXFilter } from './types';
 import { FileXMenu } from './FileXMenu';
 
 export const VIEW_TYPE_FILEX_CONTROL = 'filex-control';
-
-const EXTENSIONS = {
-    MD: 'md',
-    CANVA: 'canva'
-} as const;
 
 const SEGMENTS = {
     VAULT: 'vault',
@@ -20,20 +15,17 @@ const SEGMENTS = {
     NOT_LINK: 'not-link'
 } as const;
 
-const DOM_SELECTORS = {
-    FILE_LIST_BODY: 'tbody.file-list-body',
-    FOLDER_PATH_CONTAINER: '.folder-path-container',
-    FILE_COUNT: '.file-count',
-    TAGS_CONTAINER: '.tags-container',
-    SEARCH_INPUT: '.search-input',
-    SEGMENT_BUTTON: '.segment-button'
-} as const;
-
 export class FileXControlView extends ItemView {
     private fileAPI: FileAPI;
     private plugin: FileXPlugin;
     private properties: string[];
-    private decent: boolean = false;
+    private sortConfig: {
+        column: string;
+        isDescending: boolean;
+    } = {
+        column: 'name',
+        isDescending: false
+    };
     private showAttachments: boolean = true;
     private showMd: boolean = true;
     private showFolder: boolean = true;
@@ -73,11 +65,13 @@ export class FileXControlView extends ItemView {
         return VIEW_TYPE_FILEX_CONTROL;
     }
 
-
     getDisplayText() {
         return 'FileX Control';
     }
 
+    getIcon() {
+        return 'folder';
+    }
 
     async onOpen() {
         this.setHtml();
@@ -91,6 +85,7 @@ export class FileXControlView extends ItemView {
         this.initOptionListeners();
         this.initSearchListener();
         this.initTableHeaders();
+        this.initCollapseListeners();
     }
 
     private initSegmentListeners() {
@@ -104,20 +99,13 @@ export class FileXControlView extends ItemView {
     }
 
     private initOptionListeners() {
-        type OptionKey = 'sort-order' | 'show-attachments' | 'show-md' | 'show-folder' | 'show-amount';
+        type OptionKey = 'show-attachments' | 'show-md' | 'show-folder' | 'show-amount';
         type OptionConfig = {
             selector: string;
             handler: () => void;
         };
 
         const options: Record<OptionKey, OptionConfig> = {
-            'sort-order': {
-                selector: '.options-row .sort-order',
-                handler: () => {
-                    this.decent = !this.decent;
-                    this.refresh();
-                }
-            },
             'show-attachments': {
                 selector: '.options-row .show-attachments',
                 handler: () => {
@@ -176,12 +164,45 @@ export class FileXControlView extends ItemView {
 
     private initTableHeaders() {
         const headerTr = this.contentEl.querySelector(".file-list-header tr");
-        if (!headerTr || !this.properties.length) return;
+        if (!headerTr) return;
 
-        const headerHtml = this.properties
-            .map(property => `<th>${property}</th>`)
-            .join('');
-        headerTr.insertAdjacentHTML('beforeend', headerHtml);
+        const nameHeader = headerTr.querySelector('th');
+        if (nameHeader) {
+            nameHeader.addClass('sortable');
+            this.addSortListener(nameHeader, 'name');
+        }
+
+        if (this.properties.length) {
+            const headerHtml = this.properties
+                .map(property => `<th class="sortable">${property}</th>`)
+                .join('');
+            headerTr.insertAdjacentHTML('beforeend', headerHtml);
+
+            headerTr.querySelectorAll('th.sortable').forEach(th => {
+                if (th !== nameHeader) {
+                    this.addSortListener(th as HTMLElement, th.textContent || '');
+                }
+            });
+        }
+    }
+
+    private addSortListener(th: HTMLElement, column: string) {
+        th.addEventListener('click', () => {
+            this.contentEl.querySelectorAll('th.sortable').forEach(header => {
+                header.removeClass('sort-asc', 'sort-desc');
+            });
+
+            if (this.sortConfig.column === column) {
+                this.sortConfig.isDescending = !this.sortConfig.isDescending;
+            } else {
+                this.sortConfig.column = column;
+                this.sortConfig.isDescending = false;
+            }
+
+            th.addClass(this.sortConfig.isDescending ? 'sort-desc' : 'sort-asc');
+
+            this.refresh();
+        });
     }
 
     private async saveFileFrontmatter(file: TFile, map: Record<string, any>) {
@@ -241,7 +262,6 @@ export class FileXControlView extends ItemView {
             setIcon(a.createEl('span', { cls: 'filex-icon filex-icon-file' }), 'file');
             a.createEl('span', { text: file.name });
             a.addEventListener('click', () => {
-                // 檢查是否有已開啟的相同檔案
                 const leaves = this.app.workspace.getLeavesOfType('markdown');
                 const existingLeaf = leaves.find(leaf => {
                     const viewState = leaf.getViewState();
@@ -249,10 +269,8 @@ export class FileXControlView extends ItemView {
                 });
 
                 if (existingLeaf) {
-                    // 如果找到已開啟的檔案，切換到該分頁
                     this.app.workspace.setActiveLeaf(existingLeaf, { focus: true });
                 } else {
-                    // 如果沒有找到，開啟新分頁
                     this.app.workspace.openLinkText(file.path, '', true);
                 }
             });
@@ -325,7 +343,7 @@ export class FileXControlView extends ItemView {
         let count = 0;
         folder.children.forEach(child => {
             if (child instanceof TFile) {
-                const isMdOrCanva = child.extension === EXTENSIONS.MD || child.extension === EXTENSIONS.CANVA;
+                const isMdOrCanva = this.fileAPI.isObsidianExtension(child.extension);
                 if ((isMdOrCanva && this.showMd) || (!isMdOrCanva && this.showAttachments)) {
                     count++;
                 }
@@ -354,7 +372,7 @@ export class FileXControlView extends ItemView {
     }
 
     buildTableByTFolder(tFolder: TFolder) {
-        const tbody = this.getDomElement(DOM_SELECTORS.FILE_LIST_BODY);
+        const tbody = this.getDomElement("tbody.file-list-body");
         tbody.innerHTML = '';
 
         if (this.filter.segment === SEGMENTS.TAG) {
@@ -382,7 +400,7 @@ export class FileXControlView extends ItemView {
             this.filter
         );
 
-        if (this.decent) {
+        if (this.sortConfig.isDescending) {
             tFolderFolderList.reverse();
             tFolderFileList.reverse();
         }
@@ -398,7 +416,7 @@ export class FileXControlView extends ItemView {
 
     private renderFileList(tbody: HTMLElement, files: TFile[]) {
         files.forEach(file => {
-            const isMdOrCanva = file.extension === EXTENSIONS.MD || file.extension === EXTENSIONS.CANVA;
+            const isMdOrCanva = this.fileAPI.isObsidianExtension(file.extension);
             if ((isMdOrCanva && !this.showMd) || (!isMdOrCanva && !this.showAttachments)) {
                 return;
             }
@@ -411,15 +429,13 @@ export class FileXControlView extends ItemView {
         let fileCountSpan = this.contentEl.querySelector('.file-count')!;
         folderPathContainer.innerHTML = '';
 
-        // 計算檔案數量的輔助函數
         const calculateFileCount = (files: TFile[]) => {
             let totalCount = 0;
             let visibleCount = 0;
 
             files.forEach(file => {
-                const isMdOrCanva = file.extension === EXTENSIONS.MD || file.extension === EXTENSIONS.CANVA;
+                const isMdOrCanva = this.fileAPI.isObsidianExtension(file.extension);
                 
-                // 根據顯示設定計算可見檔案數
                 if (isMdOrCanva && this.showMd) {
                     totalCount++;
                     if (this.fileAPI.filterItems([file], this.filter).length > 0) {
@@ -436,7 +452,6 @@ export class FileXControlView extends ItemView {
             return { visibleCount, totalCount };
         };
 
-        // 更新檔案計數
         let fileCount;
         if (this.filter.segment === SEGMENTS.TAG) {
             fileCount = calculateFileCount(this.fileAPI.getAllFiles());
@@ -451,10 +466,8 @@ export class FileXControlView extends ItemView {
             }
         }
 
-        // 顯示檔案計數
         fileCountSpan.setText(`${fileCount.visibleCount} / ${fileCount.totalCount} files`);
 
-        // 原有的路徑顯示邏輯
         if (this.filter.segment === SEGMENTS.TAG) {
             if (this.filter.tags && this.filter.tags.length > 0) {
                 const tagName = this.filter.tags[0];
@@ -471,7 +484,6 @@ export class FileXControlView extends ItemView {
             return;
         }
 
-        // 原有的資料夾路徑邏輯
         folderPathContainer.createEl('span', { text: " / " });
         if (folderPath == "/") return;
 
@@ -480,18 +492,15 @@ export class FileXControlView extends ItemView {
             absolutePath += folderName;
             let currentAbsolutePath = absolutePath;
             
-            // 創建資料夾路徑項目
             const pathItem = folderPathContainer.createEl('span', { 
                 text: folderName, 
                 cls: 'folder-path-item' 
             });
 
-            // 添加左鍵點擊事件
             pathItem.addEventListener('click', () => {
                 this.buildTableByFolderPath(currentAbsolutePath);
             });
 
-            // 添加右鍵選單
             pathItem.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
                 const folder = this.fileAPI.getTFolderByFolderPath(currentAbsolutePath);
@@ -561,20 +570,17 @@ export class FileXControlView extends ItemView {
             let tbody = this.contentEl.querySelector("tbody.file-list-body")!;
             tbody.innerHTML = '';
             
-            // 獲取所有檔案並過濾
             let allFiles = this.fileAPI.getAllFiles();
             let filteredFiles = this.fileAPI.filterItems(allFiles, this.filter);
             
-            // 排序
             filteredFiles = this.fileAPI.sortFile(filteredFiles);
-            if (this.decent) {
+            if (this.sortConfig.isDescending) {
                 filteredFiles.reverse();
             }
 
-            // 顯示檔案
             filteredFiles.forEach(file => {
-                if ((file.extension === EXTENSIONS.MD || file.extension === EXTENSIONS.CANVA) && !this.showMd) return;
-                if (file.extension !== EXTENSIONS.MD && file.extension !== EXTENSIONS.CANVA && !this.showAttachments) return;
+                if ((this.fileAPI.isObsidianExtension(file.extension)) && !this.showMd) return;
+                if (!this.fileAPI.isObsidianExtension(file.extension) && !this.showAttachments) return;
                 this.setTrInnerHtml(tbody.createEl('tr'), file, "file");
             });
 
@@ -584,37 +590,30 @@ export class FileXControlView extends ItemView {
             let tbody = this.contentEl.querySelector("tbody.file-list-body")!;
             tbody.innerHTML = '';
             
-            // 獲取未連結的檔案
             let unlinkedFiles = this.fileAPI.getUnlinkedFiles();
             let filteredFiles = this.fileAPI.filterItems(unlinkedFiles, this.filter);
             
-            // 排序
             filteredFiles = this.fileAPI.sortFile(filteredFiles);
-            if (this.decent) {
+            if (this.sortConfig.isDescending) {
                 filteredFiles.reverse();
             }
 
-            // 顯示檔案
             filteredFiles.forEach(file => {
                 if (!this.showAttachments) return;
                 this.setTrInnerHtml(tbody.createEl('tr'), file, "file");
             });
 
         } else if (tab === SEGMENTS.TAG) {
-            // 清除舊的標籤內容
             let tagContainer = tagsContainer.querySelector('.multi-select-container')!;
             tagContainer.innerHTML = '';
             
-            // 重置 filter
             this.filter = {
                 segment: SEGMENTS.TAG,
                 tags: []
             };
             
-            // 更新路徑顯示
             this.buildFileInfoPath('');
             
-            // 顯示標籤容器並添加新標籤
             tagsContainer.style.display = 'block';
             let tagNameList: string[] = this.fileAPI.getAllTagNames();
             tagNameList.forEach(tagName => {
@@ -666,7 +665,6 @@ export class FileXControlView extends ItemView {
         ];
 
         const options = [
-            { name: 'decend', class: 'sort-order' },
             { name: 'show atta', class: 'show-attachments', checked: true },
             { name: 'show md/canva', class: 'show-md', checked: true },
             { name: 'show folder', class: 'show-folder', checked: true },
@@ -675,28 +673,30 @@ export class FileXControlView extends ItemView {
 
         return `
             <div class="widget-container">
-                <div class="button-row">
-                    ${segments.map(segment => `
-                        <button class="segment-button${segment.active ? ' active' : ''}" id="${segment.id}">
-                            ${segment.text}
-                        </button>
-                    `).join('')}
+                <div class="widget-header">
+                    <div class="collapse-button">
+                        <span class="collapse-icon"></span>
+                    </div>
                 </div>
-                <hr/>
-                <div class="options-row">
-                    <div class="checkbox-group">
-                        ${options.map(option => `
-                            <label>
-                                <input type="checkbox" class="${option.class}"${option.checked ? ' checked' : ''}>
-                                ${option.name}
-                            </label>
+                <div class="widget-content">
+                    <div class="button-row">
+                        ${segments.map(segment => `
+                            <button class="segment-button${segment.active ? ' active' : ''}" id="${segment.id}">
+                                ${segment.text}
+                            </button>
                         `).join('')}
                     </div>
-                    <select class="sort-select">
-                        <option value="name">按名稱排序</option>
-                        <option value="created">按建立時間排序</option>
-                        <option value="modified">按修改時間排序</option>
-                    </select>
+                    <hr/>
+                    <div class="options-row">
+                        <div class="checkbox-group">
+                            ${options.map(option => `
+                                <label>
+                                    <input type="checkbox" class="${option.class}"${option.checked ? ' checked' : ''}>
+                                    ${option.name}
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -717,9 +717,16 @@ export class FileXControlView extends ItemView {
     private createTagsSection(): string {
         return `
             <div class="tags-container">
-                <div class="metadata-property" tabindex="0" data-property-key="tags" data-property-type="multitext">
-                    <div class="metadata-property-value">
-                        <div class="multi-select-container"></div>
+                <div class="tags-header">
+                    <div class="collapse-button">
+                        <span class="collapse-icon"></span>
+                    </div>
+                </div>
+                <div class="tags-content">
+                    <div class="metadata-property" tabindex="0" data-property-key="tags" data-property-type="multitext">
+                        <div class="metadata-property-value">
+                            <div class="multi-select-container"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -754,4 +761,55 @@ export class FileXControlView extends ItemView {
             }
         });
     }
+
+    static handleBreadcrumbClick(app: App, path: string) {
+        const leaves = app.workspace.getLeavesOfType(VIEW_TYPE_FILEX_CONTROL);
+        if (leaves.length > 0) {
+            const view = leaves[0].view as FileXControlView;
+            view.buildTableByFolderPath(path);
+            app.workspace.revealLeaf(leaves[0]);
+        }
+    }
+
+    private initCollapseListeners() {
+        const widgetCollapseBtn = this.contentEl.querySelector('.widget-container .collapse-button');
+        const widgetContent = this.contentEl.querySelector('.widget-container .widget-content');
+        if (widgetCollapseBtn && widgetContent) {
+            widgetCollapseBtn.addEventListener('click', () => {
+                widgetContent.classList.toggle('collapsed');
+                widgetCollapseBtn.classList.toggle('collapsed');
+            });
+        }
+
+        const tagsCollapseBtn = this.contentEl.querySelector('.tags-container .collapse-button');
+        const tagsContent = this.contentEl.querySelector('.tags-container .tags-content');
+        if (tagsCollapseBtn && tagsContent) {
+            tagsCollapseBtn.addEventListener('click', () => {
+                tagsContent.classList.toggle('collapsed');
+                tagsCollapseBtn.classList.toggle('collapsed');
+            });
+        }
+    }
+}
+
+export function initBreadcrumbListener(app: App) {
+    const handleClick = (event: MouseEvent) => {
+        const target = event.target as HTMLElement;
+        if (target && target.matches('.view-header-breadcrumb')) {
+            const breadcrumbs = Array.from(target.closest('.view-header-title-parent')?.querySelectorAll('.view-header-breadcrumb') || []);
+            const currentIndex = breadcrumbs.indexOf(target);
+            
+            if (currentIndex !== -1) {
+                const fullPath = breadcrumbs
+                    .slice(0, currentIndex + 1)
+                    .map(el => el.textContent)
+                    .filter(text => text)
+                    .join('/');
+                
+                FileXControlView.handleBreadcrumbClick(app, fullPath);
+            }
+        }
+    };
+
+    document.addEventListener('click', handleClick, true);
 }

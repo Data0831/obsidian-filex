@@ -8,6 +8,10 @@ export class FileAPI {
         this.rootPath = '';
     }
 
+    isObsidianExtension(extension: string): boolean {
+        return extension === 'md' || extension === 'canva';
+    }
+
     getRoot(): TFolder {
         return this.view.app.vault.getRoot();
     }
@@ -140,8 +144,8 @@ export class FileAPI {
     getUnlinkedFiles(): TFile[] {
         const allFiles = this.getAllFiles();
         const mdFiles = this.getAllMdFiles();
-        const attachments = allFiles.filter(file => 
-            file.extension !== 'md' && 
+        const attachments = allFiles.filter(file =>
+            file.extension !== 'md' &&
             file.extension !== 'canva'
         );
 

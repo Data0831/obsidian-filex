@@ -1,4 +1,8 @@
 .filex-control-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
 
     .search-container {
         display: flex;
@@ -31,8 +35,26 @@
     .widget-container {
         background-color: var(--background-primary);
         border-radius: 8px;
-        padding: 12px 16px;
+        padding: 0;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+
+        .widget-header {
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid var(--background-modifier-border);
+        }
+
+        .widget-content {
+            padding: 12px 16px;
+            transition: max-height 0.3s ease;
+            overflow: hidden;
+
+            &.collapsed {
+                max-height: 0;
+                padding: 0 16px;
+            }
+        }
 
         .button-row {
             display: flex;
@@ -201,19 +223,29 @@
         border-radius: 8px;
         background-color: var(--background-primary);
         min-height: 100px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
 
         .file-list-table {
             width: 100%;
             border-collapse: collapse;
             font-size: 14px;
-            /* table-layout: fixed; */
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
 
-
-        /* 表頭樣式 */
         .file-list-header {
             background-color: var(--background-secondary);
             border-bottom: 1px solid var(--background-modifier-border);
+        }
+
+        .file-list-body {
+            flex: 1;
+            overflow-y: auto;
+            display: block;
         }
 
         .file-list-header th {
@@ -224,7 +256,6 @@
             font-size: 13px;
         }
 
-        /* 表格內容樣式 */
         .file-list-body tr {
             width: 100%;
             border-bottom: 1px solid var(--background-modifier-border);
@@ -279,15 +310,32 @@
         .file-list-body tr input:focus{
             box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
         }
-
     }
 
     .tags-container {
         margin-top: 16px;
         background-color: var(--background-primary);
-        padding: 12px 16px;
+        padding: 0;
         border-radius: 8px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+
+        .tags-header {
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid var(--background-modifier-border);
+        }
+
+        .tags-content {
+            padding: 12px 16px;
+            transition: max-height 0.3s ease;
+            overflow: hidden;
+
+            &.collapsed {
+                max-height: 0;
+                padding: 0 16px;
+            }
+        }
 
         .multi-select-pill-content span {
             font-size: 0.65rem;
@@ -305,8 +353,34 @@
         }
     }
 
-}
+    .collapse-button {
+        cursor: pointer;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        transition: background-color 0.2s ease;
 
+        &:hover {
+            background-color: var(--background-modifier-hover);
+        }
+
+        .collapse-icon {
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 6px 4px 0 4px;
+            border-color: var(--text-muted) transparent transparent transparent;
+            transition: transform 0.3s ease;
+        }
+
+        &.collapsed .collapse-icon {
+            transform: rotate(-90deg);
+        }
+    }
+}
 
 @media screen and (min-width: 768px) {
     .options-row {
@@ -318,4 +392,36 @@
     .sort-select {
         min-width: 160px;
     }
+}
+
+/* 添加排序相關樣式 */
+th.sortable {
+    cursor: pointer;
+    position: relative;
+    padding-right: 18px;
+}
+
+th.sortable:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+th.sort-asc::after,
+th.sort-desc::after {
+    content: '';
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+}
+
+th.sort-asc::after {
+    border-bottom: 6px solid var(--text-normal);
+    margin-top: -2px;
+}
+
+th.sort-desc::after {
+    border-top: 6px solid var(--text-normal);
+    margin-top: 2px;
 }

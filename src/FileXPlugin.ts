@@ -2,20 +2,17 @@ import { Plugin } from 'obsidian';
 import { FileXSettings, DEFAULT_SETTINGS } from './FileXSettings';
 import { FileXSettingTab } from './FileXSettingTab';
 import registerCommands from './FileXcommand';
-
-
 import { FileXControlView, VIEW_TYPE_FILEX_CONTROL } from './FileXControlView';
-
+import { initBreadcrumbListener } from './FileXControlView';
 
 export class FileXPlugin extends Plugin {
     settings: FileXSettings;
 
-
     async onload() {
-        await this.init(this);
         await this.loadSettings();
-        registerCommands(this);
+        this.registerCommands();
         this.addSettingTab(new FileXSettingTab(this.app, this));
+        initBreadcrumbListener(this.app);
         this.registerView(VIEW_TYPE_FILEX_CONTROL, (leaf) => new FileXControlView(leaf, this));
     }
 
@@ -23,8 +20,8 @@ export class FileXPlugin extends Plugin {
 
     }
 
-    async init(plugin: FileXPlugin) {
-
+    private registerCommands(){
+        registerCommands(this);
     }
 
     async loadSettings() {
