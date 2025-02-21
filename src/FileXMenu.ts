@@ -1,8 +1,48 @@
-import { Menu, TAbstractFile, TFile, TFolder } from 'obsidian';
-import { FileXControlView } from './FileXControlView';
+import { Menu, TAbstractFile, TFile, TFolder, Modal, Setting } from 'obsidian';
+import { FileXView } from './FileXView';
+
+class InputModal extends Modal {
+    private result: string;
+    private onSubmit: (result: string) => void;
+
+    constructor(app: any, defaultValue: string, onSubmit: (result: string) => void) {
+        super(app);
+        this.result = defaultValue;
+        this.onSubmit = onSubmit;
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.createEl("h2", { text: "Enter name" });
+
+        new Setting(contentEl)
+            .setName("Name")
+            .addText((text) =>
+                text
+                    .setValue(this.result)
+                    .onChange((value) => {
+                        this.result = value
+                    }));
+
+        new Setting(contentEl)
+            .addButton((btn) =>
+                btn
+                    .setButtonText("Submit")
+                    .setCta()
+                    .onClick(() => {
+                        this.close();
+                        this.onSubmit(this.result);
+                    }));
+    }
+
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
+    }
+}
 
 export class FileXMenu {
-    constructor(private view: FileXControlView) {}
+    constructor(private view: FileXView) {}
 
     showMenu(e: MouseEvent, file: TAbstractFile) {
         const menu = new Menu();
@@ -27,16 +67,22 @@ export class FileXMenu {
         menu.addItem((item) => {
             item.setIcon("document")
                 .setTitle("New note")
-                .onClick(async () => {
-                    await this.view.app.vault.create(folder.path + "/Untitled.md", "");
+                .onClick(() => {
+                    new InputModal(this.view.app, "Untitled.md", async (result) => {
+                        await this.view.app.vault.create(folder.path + "/" + result, "");
+                        this.view.refresh();
+                    }).open();
                 });
         });
 
         menu.addItem((item) => {
             item.setIcon("folder")
                 .setTitle("New folder")
-                .onClick(async () => {
-                    await this.view.app.vault.createFolder(folder.path + "/New folder");
+                .onClick(() => {
+                    new InputModal(this.view.app, "New folder", async (result) => {
+                        await this.view.app.vault.createFolder(folder.path + "/" + result);
+                        this.view.refresh();
+                    }).open();
                 });
         });
     }
@@ -45,8 +91,14 @@ export class FileXMenu {
         menu.addItem((item) => {
             item.setIcon("pencil")
                 .setTitle("Rename...")
-                .onClick(async () => {
-                    const newPath = await this.view.app.vault.rename(file, file.path.replace(file.name, "Untitled"));
+                .onClick(() => {
+                    new InputModal(this.view.app, file.name, async (result) => {
+                        const newPath = await this.view.app.vault.rename(
+                            file, 
+                            file.path.replace(file.name, result)
+                        );
+                        this.view.refresh();
+                    }).open();
                 });
         });
 

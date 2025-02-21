@@ -1,4 +1,17 @@
-move all file(attachments) to the same folder
-more icon by extension
-remove all unlink file
-tags container height fixed， use overflow-y: auto
+# 需修正
+- bug
+    - delete 操作讓 filter 沒有變化，所以 refresh 沒有反應
+- menu
+    - 默認 file menu 增加一項 show file in Filex 可以開啟 filex 視圖，快速跳轉
+    - 觸發時用 notice 提示
+- 編輯模式 新增詳細的 notice
+- 按鈕
+    - 將所有檔案（附件）移至同一資料夾 的按鈕
+    - 移除所有未連結的檔案
+- 根據擴展名增加更多圖示
+- tags-container 高度固定，使用 overflow-y: auto
+- 渲染 file-list 的數量限制為 100
+- 考慮增加
+    - 勾選模式，選擇多數檔案，可進行 刪除、移動等動作
+    - reorder 模式，含可以去掉前綴比如 ele 01name ele 02name 這樣的檔案
+    - 新增一個 view 替代掉現有的 file 管理

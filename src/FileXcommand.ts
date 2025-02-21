@@ -1,6 +1,6 @@
 import FileXPlugin from "../main";
-import { VIEW_TYPE_FILEX_CONTROL } from "./FileXControlView";
-import { FileXControlView } from "./FileXControlView";
+import { VIEW_TYPE_FILEX } from "./FileXView";
+import { FileXView } from "./FileXView";
 import { getAllTags, Notice, MarkdownView, ItemView } from "obsidian";
 import { FileAPI } from "./FileAPI";
 import { TagSelectModal } from "./TagSelectModal";
@@ -9,8 +9,7 @@ import { SegmentKey } from './FileXHtml';
 import { activeView, getView } from './viewUtile';
 
 export default function registerCommands(plugin: FileXPlugin) {
-    const getFileXControlView = () => getView(plugin.app, VIEW_TYPE_FILEX_CONTROL);
-    const activeFileXControlView = () => activeView(plugin.app, VIEW_TYPE_FILEX_CONTROL);
+    const activeFileXControlView = () => activeView(plugin.app, VIEW_TYPE_FILEX);
     
     plugin.addCommand({
         id: 'open-filex-control',
@@ -30,7 +29,11 @@ export default function registerCommands(plugin: FileXPlugin) {
         callback: () => {
             plugin.settings.userMode = (plugin.settings.userMode) == "read" ? "edit" : "read";
             plugin.saveSettings();
-            (getFileXControlView().view as FileXControlView).refresh();
+            const view = getView(plugin.app, VIEW_TYPE_FILEX, false);
+            if (view) {
+                (view.view as FileXView).refresh();
+                new Notice(`切換成 ${plugin.settings.userMode} 模式`);
+            }
         },
         hotkeys: [{
             modifiers: [],
@@ -42,8 +45,11 @@ export default function registerCommands(plugin: FileXPlugin) {
         id: 'refresh',
         name: 'refresh',
         callback: () => {
-            (getFileXControlView().view as FileXControlView).refresh();
-            console.log('refresh');
+            const view = getView(plugin.app, VIEW_TYPE_FILEX, false);
+            if (view) {
+                (view.view as FileXView).refresh();
+                new Notice('刷新成功');
+            }
         },
         hotkeys: [{
             modifiers: [],
@@ -52,8 +58,8 @@ export default function registerCommands(plugin: FileXPlugin) {
     });
 
     plugin.addCommand({
-        id: 'link-generate',
-        name: 'link generate',
+        id: 'tag-link-generate',
+        name: 'tag link generate',
         callback: () => {
             const activeFile = plugin.app.workspace.getActiveFile();
             const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);

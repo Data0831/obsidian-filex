@@ -294,6 +294,7 @@
             flex-direction: row;
             align-items: center;
             height: 0.8rem !important;
+            width: fit-content;
         }
 
         .file-list-body .file-link {

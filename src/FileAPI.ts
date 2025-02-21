@@ -136,7 +136,7 @@ export class FileAPI {
     }
 
     private handleFolderAction(filter: Filter) {
-        const folder = this.getTFolderByFolderPath(filter.folderPath!);
+        const folder = this.getTFolderByPath(filter.folderPath!);
         if (folder) {
             this.fileAndFolder = {
                 files: folder.children.filter(file => file instanceof TFile),
@@ -227,7 +227,7 @@ export class FileAPI {
     getMdFilesByFolderPath = (folderPath: string): TFile[] => 
         this.view.app.vault.getMarkdownFiles().filter(file => file.path.startsWith(folderPath));
 
-    getTFolderByFolderPath = (folderPath: string): TFolder | null => 
+    getTFolderByPath = (folderPath: string): TFolder | null => 
         this.view.app.vault.getFolderByPath(folderPath);
 
     private sortByAlphabet = (a: string, b: string): number => {

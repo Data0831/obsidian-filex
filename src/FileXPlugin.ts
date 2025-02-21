@@ -2,14 +2,14 @@ import { Plugin, App } from 'obsidian';
 import { FileXSettings, DEFAULT_SETTINGS } from './FileXSettings';
 import { FileXSettingTab } from './FileXSettingTab';
 import registerCommands from './FileXcommand';
-import { FileXControlView, VIEW_TYPE_FILEX_CONTROL } from './FileXControlView';
+import { FileXView, VIEW_TYPE_FILEX } from './FileXView';
 import { Action } from './Filter';
 
 export function initBreadcrumbListener(app: App) {
     function handleBreadcrumbClick(app: App, path: string) {
-        const leaves = app.workspace.getLeavesOfType(VIEW_TYPE_FILEX_CONTROL);
+        const leaves = app.workspace.getLeavesOfType(VIEW_TYPE_FILEX);
         if (leaves.length > 0) {
-            const view = leaves[0].view as FileXControlView;
+            const view = leaves[0].view as FileXView;
             view.filter.folderPath = path;
             view.filter.action = Action.Folder;
             view.refresh();
@@ -45,7 +45,7 @@ export class FileXPlugin extends Plugin {
         this.registerCommands();
         this.addSettingTab(new FileXSettingTab(this.app, this));
         initBreadcrumbListener(this.app);
-        this.registerView(VIEW_TYPE_FILEX_CONTROL, (leaf) => new FileXControlView(leaf, this));
+        this.registerView(VIEW_TYPE_FILEX, (leaf) => new FileXView(leaf, this));
     }
 
     onunload() {

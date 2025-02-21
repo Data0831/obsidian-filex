@@ -1,7 +1,7 @@
 {
 	"id": "obsidian-filex",
 	"name": "FileX",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"minAppVersion": "0.15.0",
 	"description": "an obsidian plugin easy to edit property of file",
 	"author": "Data0831",

@@ -1,10 +1,10 @@
 3. view class 有 contentEl 屬性，可以存取 view 的 html 元素
-4. querySelectorAll 與 querySelector 不一樣
-5. .forEach 與 .map 的用法
 6. Obsidian 在其核心樣式中，會定義一系列以 -- 開頭的 CSS 變數，這些變數可以在 plugin 的 CSS 中使用
+
 7. css box-shadow
 8. css transition
 9. input:focus-visible
+
 10. match(/[a-zA-Z]/)
 11. spilt 與 slice 的用法
 12. 直接將物件傳遞到 onclick 字串中會導致 [object Object] 的問題。
@@ -214,3 +214,7 @@ export type SegmentKey = 'vault' | 'folder-l2' | 'all-files' | 'tag' | 'not-link
 - 如果你只需要一組字串型別，並且希望保持輕量級，則使用 `type` 會更合適。
 
 根據你的具體需求選擇適合的方式。
+
+
+.file-list-body a {
+            width: fit-content;

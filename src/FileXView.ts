@@ -6,7 +6,7 @@ import { FileXMenu } from './FileXMenu';
 import { FileXHtmlBuilder, SegmentKey, CheckboxKey } from './FileXHtml';
 import { Debug, ROOT_FOLDER_PATH, debounce } from './Lib';
 
-export const VIEW_TYPE_FILEX_CONTROL = 'filex-control';
+export const VIEW_TYPE_FILEX = 'filex-control';
 export interface DomCache {
     contentEl: HTMLElement;
     searchContainer: HTMLElement;
@@ -20,7 +20,7 @@ export interface DomCache {
     fileCount: HTMLElement;
 }
 
-export class FileXControlView extends ItemView {
+export class FileXView extends ItemView {
     private fileAPI: FileAPI;
     private plugin: FileXPlugin;
     private properties: string[];
@@ -53,7 +53,7 @@ export class FileXControlView extends ItemView {
     }
 
     getViewType() {
-        return VIEW_TYPE_FILEX_CONTROL;
+        return VIEW_TYPE_FILEX;
     }
 
     getDisplayText() {
@@ -173,6 +173,8 @@ export class FileXControlView extends ItemView {
             const folderIcon = this.domCache.fileInfoContainer.querySelector('span.filex-icon-folder')!;
             this.addEventListenerWithCleanup(folderIcon as HTMLElement, 'click',
                 () => segmentClickHandler(SegmentKey.Vault));
+            this.addEventListenerWithCleanup(folderIcon as HTMLElement, 'contextmenu',
+                (e) => this.showFileMenuByPath(e as MouseEvent, ROOT_FOLDER_PATH));
         }
 
         const headerClickHandler = (th: HTMLElement) => {
@@ -254,6 +256,17 @@ export class FileXControlView extends ItemView {
         this.eventListeners = [];
     }
 
+    private showFileMenuByPath(e: MouseEvent, path: string) {
+        const file = this.fileAPI.getTFolderByPath(path);
+        if (file) {
+            return this.menu.showMenu(e, file);
+        }
+    }
+        
+    private showFileMenu(e: MouseEvent, file: TAbstractFile) {
+        return this.menu.showMenu(e, file);
+    }
+
     private buildTags() {
         const multiSelectContainer = this.domCache.multiSelectContainer;
         multiSelectContainer.innerHTML = '';
@@ -274,6 +287,12 @@ export class FileXControlView extends ItemView {
             const a = tr.createEl('td').createEl('a', { href: '#', cls: 'file-link' });
             setIcon(a, 'file');
             a.createEl('span', { text: file.name });
+            
+            tr.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                this.showFileMenu(e, file);
+            });
+
             a.addEventListener('click', () => {
                 const leaves = this.app.workspace.getLeavesOfType('markdown');
                 const existingLeaf = leaves.find(leaf => {
@@ -321,6 +340,11 @@ export class FileXControlView extends ItemView {
             setIcon(a, 'folder');
             const nameSpan = a.createEl('span', { text: folder.name });
 
+            tr.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                this.showFileMenu(e, folder);
+            });
+
             if (this.filter.showAmount) {
                 const fileAndFolderCounter: FileAndFolderCounter = this.fileAPI.calculateFileCountInFolder(folder);
                 const fileCount = fileAndFolderCounter.mdFileCount + fileAndFolderCounter.canvaFileCount + fileAndFolderCounter.attachmentFileCount;
@@ -355,17 +379,6 @@ export class FileXControlView extends ItemView {
         });
 
         this.buildInfo();
-
-        // if (this.uiFilter.showAmount) {
-        //     const tagCount = this.calculateTagFileCount(tagName);
-        //     if (tagCount > 0) {
-        //         tagSpan.createEl('span', {
-        //             text: ` (${tagCount})`,
-        //             cls: 'file-amount'
-        //         });
-        //     }
-        // }
-
         this.domCache.tbody.innerHTML = '';
         this.domCache.tbody.appendChild(fragment);
     }
@@ -415,7 +428,7 @@ export class FileXControlView extends ItemView {
 
                     pathItem.addEventListener('contextmenu', (e) => {
                         e.preventDefault();
-                        const folder = this.fileAPI.getTFolderByFolderPath(currentAbsolutePath);
+                        const folder = this.fileAPI.getTFolderByPath(currentAbsolutePath);
                         if (folder) {
                             this.showFileMenu(e, folder);
                         }
@@ -444,11 +457,5 @@ export class FileXControlView extends ItemView {
         }
 
 
-    }
-
-
-
-    private showFileMenu(e: MouseEvent, file: TAbstractFile) {
-        return this.menu.showMenu(e, file);
     }
 }
