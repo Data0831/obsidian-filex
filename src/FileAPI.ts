@@ -75,9 +75,9 @@ export class FileAPI {
     }
 
     getFileAndFolderByFilter(filter: Filter): FileAndFolder {
-        Debug.log("filter", filter);
-        
+        Debug.log(filter);
         if (filter.filterEquality(this.oldFilter)) {
+            Debug.log("filter 相同");
             return this.showFilter(filter);
         }
 
@@ -128,6 +128,9 @@ export class FileAPI {
                 break;
             case SegmentKey.UnLinked:
                 this.fileAndFolder.files = this.getUnlinkedFiles();
+                break;
+            case SegmentKey.Tag:
+                this.getAllTagNames();
                 break;
         }
     }
@@ -195,6 +198,10 @@ export class FileAPI {
         return count;
     }
 
+    public getTagFileCount(tagName: string): number {
+        return this.tagsFiles[tagName]?.length || 0;
+    }
+
     getAllTagNames(): string[] {
         this.tagsFiles = { '|no-tag': [] };
   
@@ -259,57 +266,6 @@ export class FileAPI {
             return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
         });
     }
-
-    filterItems(files: TFile[], filter: Filter): TFile[] {
-        return files.filter(file => {
-            // 搜尋文字過濾
-            if (filter.searchText && filter.searchText.trim() !== '') {  // 只在有搜尋文字時過濾
-                const searchLower = filter.searchText.toLowerCase();
-                if (!file.name.toLowerCase().includes(searchLower)) {
-                    return false;
-                }
-            }
-
-            // 標籤過濾
-            if (filter.tags && filter.tags.length > 0) {
-                const cache = this.view.app.metadataCache.getFileCache(file);
-                if (!cache) return false;
-
-                // 處理 |no-tag 特殊標籤
-                if (filter.tags.includes('|no-tag')) {
-                    const tags = getAllTags(cache);
-                    return !tags || tags.length === 0;
-                }
-
-                // 一般標籤過濾
-                const fileTags = getAllTags(cache);
-                if (!fileTags || !filter.tags.some(tag => fileTags.includes(tag))) {
-                    return false;
-                }
-            }
-
-            // 資料夾路徑過濾
-            if (filter.folderPath && filter.folderPath.trim() !== '') {  // 只在有路徑時過濾
-                if (!file.path.startsWith(filter.folderPath)) {
-                    return false;
-                }
-            }
-
-            return true;
-        });
-    }
-
-    filterFolders(folders: TFolder[], filter: Filter): TFolder[] {
-        return folders.filter(folder => {
-            if (filter.searchText) {
-                const searchLower = filter.searchText.toLowerCase();
-                return folder.name.toLowerCase().includes(searchLower);
-            }
-            return true;
-        });
-    }
-
-
 }
 
 

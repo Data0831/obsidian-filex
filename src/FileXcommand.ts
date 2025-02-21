@@ -1,34 +1,16 @@
 import FileXPlugin from "../main";
 import { VIEW_TYPE_FILEX_CONTROL } from "./FileXControlView";
 import { FileXControlView } from "./FileXControlView";
-import { getAllTags, ItemView, Notice, MarkdownView } from "obsidian";
+import { getAllTags, Notice, MarkdownView, ItemView } from "obsidian";
 import { FileAPI } from "./FileAPI";
 import { TagSelectModal } from "./TagSelectModal";
 import { Filter, Action } from "./Filter";
 import { SegmentKey } from './FileXHtml';
+import { activeView, getView } from './viewUtile';
 
 export default function registerCommands(plugin: FileXPlugin) {
-    const getFileXControlView = () => {
-        const leaves = plugin.app.workspace.getLeavesOfType(VIEW_TYPE_FILEX_CONTROL);
-        if (leaves.length > 0) {
-            return leaves[0];
-        }
-
-        const new_leaf = plugin.app.workspace.getLeaf(true);
-        if (new_leaf) {
-            new_leaf.setViewState({
-                type: VIEW_TYPE_FILEX_CONTROL,
-                active: true
-            });
-        }
-        return new_leaf;
-    }
-    const activeFileXControlView = () => {
-        const leaf = getFileXControlView();
-        if (leaf) {
-            plugin.app.workspace.revealLeaf(leaf);
-        }
-    }
+    const getFileXControlView = () => getView(plugin.app, VIEW_TYPE_FILEX_CONTROL);
+    const activeFileXControlView = () => activeView(plugin.app, VIEW_TYPE_FILEX_CONTROL);
     
     plugin.addCommand({
         id: 'open-filex-control',
@@ -40,7 +22,6 @@ export default function registerCommands(plugin: FileXPlugin) {
             modifiers: [],
             key: 'F3'
         }]
-
     });
 
     plugin.addCommand({
@@ -99,28 +80,36 @@ export default function registerCommands(plugin: FileXPlugin) {
                 return;
             }
 
-            // new TagSelectModal(plugin.app, fileTags, (selectedTag: string) => {
-            //     const fileAPI = new FileAPI(plugin.app.workspace.getActiveViewOfType(ItemView)!);
-            //     const allFiles = fileAPI.getAllFiles();
-            //     const filter: Filter = new Filter(SegmentKey.Tag, Action.Show);
-            //     filter.tags = [selectedTag];
-            //     const filteredFiles = fileAPI.sortFile(fileAPI.filterItems(allFiles, filter));
+            new TagSelectModal(plugin.app, fileTags, (selectedTag: string) => {
+                const fileAPI = new FileAPI(plugin.app.workspace.getActiveViewOfType(ItemView)!);
+                const filter = new Filter(SegmentKey.Tag, Action.Segment);
+                fileAPI.getFileAndFolderByFilter(filter);
+                filter.action = Action.Tag;
+                filter.tags = [selectedTag];
+                const allFiles = fileAPI.getFileAndFolderByFilter(filter).files;
+                const filteredFiles = fileAPI.sortFile(allFiles);
+                console.log(selectedTag, filteredFiles);
                 
-            //     const editor = plugin.app.workspace.activeEditor?.editor;
-            //     if (editor) {
-            //         const links = filteredFiles
-            //             .filter(file => file.path !== activeFile.path)
-            //             .map(file => `- [[${file.basename}]]`)
-            //             .join('\n');
+                const editor = plugin.app.workspace.activeEditor?.editor;
+                if (editor) {
+                    const links = filteredFiles
+                        .filter(file => file.path !== activeFile.path)
+                        .map(file => `- [[${file.basename}]]`)
+                        .join('\n');
                     
-            //         if (links) {
-            //             const cursor = editor.getCursor();
-            //             editor.replaceRange('\n' + links + '\n', cursor);
-            //         } else {
-            //             new Notice('沒有找到相關的檔案');
-            //         }
-            //     }
-            // }).open();
+                    if (links) {
+                        const cursor = editor.getCursor();
+                        editor.replaceRange('\n' + links + '\n', cursor);
+                    } else {
+                        new Notice('沒有找到相關的檔案');
+                    }
+                }
+            }).open();
         },
+
+        hotkeys: [{
+            modifiers: [],
+            key: 'F6'
+        }]
     });
 }

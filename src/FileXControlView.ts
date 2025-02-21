@@ -158,6 +158,7 @@ export class FileXControlView extends ItemView {
         const checkBoxClickHandler = (checkboxKey: CheckboxKey) => {
             this.filter.toggleCheckbox(checkboxKey);
             this.filter.action = Action.Show;
+            (checkboxKey === CheckboxKey.ShowAmount && this.filter.showAmount && this.filter.action === Action.Show) ? this.buildTags() : this.buildTags() ;
             this.buildTable();
         }
 
@@ -253,30 +254,18 @@ export class FileXControlView extends ItemView {
         this.eventListeners = [];
     }
 
-    // private calculateTagFileCount(tagName: string): number {
-    //     if (this.tagCountCache.has(tagName)) {
-    //         return this.tagCountCache.get(tagName)!;
-    //     }
-
-    //     const allFiles = this.fileAPI.getAllFiles();
-    //     const count = allFiles.filter(file => {
-    //         const cache = this.app.metadataCache.getFileCache(file);
-    //         if (!cache) return false;
-    //         const fileTags = getAllTags(cache);
-    //         return fileTags && fileTags.includes(tagName);
-    //     }).length;
-
-    //     this.tagCountCache.set(tagName, count);
-    //     return count;
-    // }
-
     private buildTags() {
         const multiSelectContainer = this.domCache.multiSelectContainer;
         multiSelectContainer.innerHTML = '';
 
         this.fileAPI.getAllTagNames().forEach(tagName => {
-            multiSelectContainer.createEl('div', { cls: 'multi-select-pill tag-span' })
-                .createEl('div', { cls: 'multi-select-pill-content' }).createEl('span', { text: tagName });
+            const tagSpan = multiSelectContainer.createEl('div', { cls: 'multi-select-pill tag-span' })
+                .createEl('div', { cls: 'multi-select-pill-content' });
+            tagSpan.createEl('span', { text: tagName });
+
+            if (this.filter.showAmount) {
+                tagSpan.createEl('span', { text: `(${this.fileAPI.getTagFileCount(tagName)})` });
+            }
         });
     }
 
