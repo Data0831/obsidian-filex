@@ -1,9 +1,14 @@
 # 需修正
 - bug
     - delete 操作讓 filter 沒有變化，所以 refresh 沒有反應
+- file
+    - file query api, file sort api
 - menu
     - 默認 file menu 增加一項 show file in Filex 可以開啟 filex 視圖，快速跳轉
     - 觸發時用 notice 提示
+    - 觸發的 modal 顯示路徑
+        - 讓其可以在 attachment 那裡使用
+- eventListener 統一化
 - 編輯模式 新增詳細的 notice
 - 按鈕
     - 將所有檔案（附件）移至同一資料夾 的按鈕

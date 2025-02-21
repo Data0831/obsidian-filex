@@ -76,11 +76,12 @@ export class FileAPI {
 
     getFileAndFolderByFilter(filter: Filter): FileAndFolder {
         Debug.log(filter);
-        if (filter.filterEquality(this.oldFilter)) {
+        if (!filter.refresh && filter.filterEquality(this.oldFilter)) {
             Debug.log("filter 相同");
             return this.showFilter(filter);
         }
-
+        
+        filter.refresh = false;
         this.oldFilter.copyValue(filter);
         this.fileAndFolder = { files: [], folders: [] };
 

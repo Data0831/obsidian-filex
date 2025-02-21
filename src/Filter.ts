@@ -44,6 +44,8 @@ export class Filter {
     private _sortAccending: boolean;
     private _sortKey: string;
 
+    private _refresh: boolean;
+
     get searchText(): string {
         return this._searchText;
     }
@@ -142,6 +144,14 @@ export class Filter {
         this._action = Action.Sort;
     }
 
+    get refresh(): boolean {
+        return this._refresh;
+    }
+
+    set refresh(value: boolean) {
+        this._refresh = value;
+    }
+
     constructor(segment: SegmentKey, action: Action) {
         this._segment = segment;
         this._action = action;
@@ -154,6 +164,7 @@ export class Filter {
         this._showAmount = false;
         this._sortAccending = true;
         this._sortKey = 'name';
+        this._refresh = false;
     }
 
     public createNewCopy(): Filter {
@@ -167,6 +178,7 @@ export class Filter {
         newFilter._showAmount = this._showAmount;
         newFilter._sortAccending = this._sortAccending;
         newFilter._sortKey = this._sortKey;
+        newFilter._refresh = this._refresh;
         return newFilter;
     }
 
@@ -182,6 +194,7 @@ export class Filter {
         this._showAmount = filter._showAmount;
         this._sortAccending = filter._sortAccending;
         this._sortKey = filter._sortKey;
+        this._refresh = filter._refresh;
     }
 
     public isSearchTextEmptyOrUndefined(): boolean {

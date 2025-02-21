@@ -16,6 +16,7 @@ export default function registerCommands(plugin: FileXPlugin) {
         name: 'open filex control',
         callback: () => {
             activeFileXControlView();
+            new Notice('已開啟 FileX 控制面板');
         },
         hotkeys: [{
             modifiers: [],
@@ -87,6 +88,7 @@ export default function registerCommands(plugin: FileXPlugin) {
             }
 
             new TagSelectModal(plugin.app, fileTags, (selectedTag: string) => {
+                new Notice(`已選擇標籤：${selectedTag}`);
                 const fileAPI = new FileAPI(plugin.app.workspace.getActiveViewOfType(ItemView)!);
                 const filter = new Filter(SegmentKey.Tag, Action.Segment);
                 fileAPI.getFileAndFolderByFilter(filter);
@@ -106,6 +108,7 @@ export default function registerCommands(plugin: FileXPlugin) {
                     if (links) {
                         const cursor = editor.getCursor();
                         editor.replaceRange('\n' + links + '\n', cursor);
+                        new Notice('已成功生成相關檔案連結');
                     } else {
                         new Notice('沒有找到相關的檔案');
                     }

@@ -68,7 +68,8 @@ export class FileXView extends ItemView {
         this.removeEventListeners();
     }
 
-    public refresh() {
+    public refresh(setRefresh: boolean = false) {
+        this.filter.refresh = setRefresh;
         this.initProperties();
         this.buildTable();
     }
