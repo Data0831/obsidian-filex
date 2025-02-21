@@ -122,3 +122,95 @@ as const
 
 
 arrow function 部會有 bind this 問題，但一般 function 會有 bind this 問題
+
+Object.values , assign, entries, keys, fromEntries
+
+
+`debounce` 是一種編程技術，通常用於限制某個函數的執行頻率。當你在短時間內多次觸發某個事件（例如，輸入框的輸入事件），`debounce` 可以確保只有在事件停止觸發一段時間後，才會執行指定的函數。這樣可以避免因為頻繁觸發而導致性能問題或不必要的計算。
+
+在你提供的代碼中，`debounce` 函數的實現如下：
+
+```typescript
+const debounce = (fn: Function, delay: number) => {
+    let timeoutId: NodeJS.Timeout;
+    return (...args: any[]) => {
+        clearTimeout(timeoutId); // 清除之前的計時器
+        timeoutId = setTimeout(() => fn.apply(this, args), delay); // 設置新的計時器
+    };
+};
+```
+
+這段代碼的工作原理是：
+
+1. 當事件被觸發時，`debounce` 會清除之前的計時器（如果有的話）。
+2. 然後，它會設置一個新的計時器，只有在指定的延遲時間（`delay`）過後，才會執行傳入的函數（`fn`）。
+3. 如果在延遲時間內再次觸發事件，計時器會被重置，這樣函數就不會被執行。
+
+這樣的設計可以有效地減少函數的調用次數，特別是在用戶快速輸入或頻繁觸發事件的情況下。
+
+
+在 JavaScript 中，當你使用 `addEventListener` 方法來為某個 DOM 元素添加事件監聽器時，當事件發生時，瀏覽器會自動將一個事件對象作為第一個參數傳遞給事件處理函數。這個事件對象包含了有關事件的詳細信息，例如事件的類型、目標元素、時間戳等。
+
+在你的代碼中，這一行：
+
+```typescript
+searchInput.addEventListener('input', handleSearch);
+```
+
+這表示當 `searchInput` 元素發生 `input` 事件時，會調用 `handleSearch` 函數。當事件發生時，瀏覽器會自動創建一個事件對象並將其傳遞給 `handleSearch` 函數，這就是為什麼 `handleSearch` 函數的定義中有 `(e: Event)` 這個參數。
+
+具體來說，`(e: Event)` 代表了事件對象，這個對象包含了以下一些屬性和方法：
+
+- **`e.target`**：觸發事件的元素，這裡是 `searchInput`。
+- **`e.type`**：事件的類型，例如 `'input'`。
+- **`e.preventDefault()`**：可以用來阻止事件的默認行為（例如，防止表單提交）。
+- **`e.stopPropagation()`**：可以用來阻止事件冒泡到父元素。
+
+因此，在 `handleSearch` 函數中，你可以使用 `e` 來獲取觸發事件的元素的相關信息，例如：
+
+```typescript
+this.filter.searchText = (e.target as HTMLInputElement).value;
+```
+
+這行代碼從事件對象中獲取了觸發事件的元素（即搜尋輸入框），並取得其當前的值，然後將其賦值給 `this.filter.searchText`。這樣就能夠根據用戶的輸入來更新搜尋條件。
+
+
+
+headerTr.insertAdjacentHTML('beforeend', headerHtml);
+這行程式碼的意思是將 `headerHtml` 的內容插入到 `headerTr` 的結尾部分。具體來說，這行程式碼使用了 `insertAdjacentHTML` 方法，這是一個 DOM 操作的方法，可以在指定的元素周圍插入 HTML 內容。
+
+在這個例子中，`headerTr` 是一個表格的行元素（`<tr>`），而 `headerHtml` 是一個包含多個表頭單元格（`<th>`）的 HTML 字串。這行程式碼的作用是將這些表頭單元格添加到表格行的末尾，從而動態生成表格的標題。
+
+以下是這行程式碼的具體解釋：
+
+- `headerTr`：指向表格的行元素。
+- `insertAdjacentHTML('beforeend', headerHtml)`：將 `headerHtml` 的內容插入到 `headerTr` 的結尾，這樣 `headerHtml` 中的所有 HTML 內容都會成為 `headerTr` 的子元素。
+
+這樣做的目的是在表格的標題行中動態添加新的列標題。
+
+export type FilesAndFolders = TFile[] | TFolder[];
+
+
+export enum Action {
+    Search = 'search',
+    Filter = 'filter',
+    Sort = 'sort',
+}
+export type SegmentKey = 'vault' | 'folder-l2' | 'all-files' | 'tag' | 'not-link';
+在這段程式碼中，`enum` 和 `type` 的選擇取決於你的需求。以下是它們的比較：
+
+1. **`enum`**:
+   - 用於定義一組命名的常數，這些常數可以是數字或字串。
+   - 可以在程式中使用 `Action.Search` 這樣的方式來引用，這樣的寫法更具可讀性。
+   - 會在編譯後生成一個物件，這可能會增加一些額外的開銷。
+
+2. **`type`**:
+   - 用於定義一組可能的字串值，這些值不會生成任何額外的物件。
+   - 更加靈活，可以用於定義複雜的型別結構。
+   - 例如，`SegmentKey` 可以用於定義一組特定的字串，這樣在使用時可以進行更嚴格的型別檢查。
+
+### 總結
+- 如果你需要一組常數並且希望能夠使用更具可讀性的方式來引用它們，則使用 `enum` 會更好。
+- 如果你只需要一組字串型別，並且希望保持輕量級，則使用 `type` 會更合適。
+
+根據你的具體需求選擇適合的方式。

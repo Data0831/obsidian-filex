@@ -1,40 +1,42 @@
-import { ItemView, setIcon, WorkspaceLeaf, TFile, TFolder, Notice, TAbstractFile, getAllTags, App  } from 'obsidian';
-import { FileAPI } from './FileAPI';
+import { ItemView, setIcon, WorkspaceLeaf, TFile, TFolder, Notice, TAbstractFile } from 'obsidian';
+import { FileAPI, FileAndFolder, FileAndFolderCounter } from './FileAPI';
 import FileXPlugin from '../main';
-import * as YAML from 'yaml';
-import { FileXFilter } from './types';
+import { Action, Filter, defaultFileFilter, isFolderChangeAction } from './Filter';
 import { FileXMenu } from './FileXMenu';
+import { FileXHtmlBuilder, SegmentKey, CheckboxKey } from './FileXHtml';
+import { Debug, ROOT_FOLDER_PATH, debounce } from './Lib';
 
 export const VIEW_TYPE_FILEX_CONTROL = 'filex-control';
-
-const SEGMENTS = {
-    VAULT: 'vault',
-    FOLDER_L2: 'folder-l2',
-    ALL_FILES: 'all-files',
-    TAG: 'tag',
-    NOT_LINK: 'not-link'
-} as const;
+export interface DomCache {
+    contentEl: HTMLElement;
+    searchContainer: HTMLElement;
+    widgetContainer: HTMLElement;
+    fileInfoContainer: HTMLElement;
+    tagsContainer: HTMLElement;
+    multiSelectContainer: HTMLElement;
+    tbody: HTMLElement;
+    headerTr: HTMLElement;
+    folderPathContainer: HTMLElement;
+    fileCount: HTMLElement;
+}
 
 export class FileXControlView extends ItemView {
     private fileAPI: FileAPI;
     private plugin: FileXPlugin;
     private properties: string[];
-    private sortConfig: {
-        column: string;
-        isDescending: boolean;
-    } = {
-        column: 'name',
-        isDescending: false
-    };
-    private showAttachments: boolean = true;
-    private showMd: boolean = true;
-    private showFolder: boolean = true;
-    private showAmount: boolean = false;
-    private filter: FileXFilter = {
-        segment: SEGMENTS.VAULT
-    };
+    public filter: Filter = defaultFileFilter.createNewCopy();
     private menu: FileXMenu;
-    private domCache: Map<string, HTMLElement> = new Map();
+    private domCache: DomCache;
+    private countRunnigStatus: boolean = false;
+    private totalFileCount: FileAndFolderCounter = {
+        folderCount: 0,
+        mdFileCount: 0,
+        canvaFileCount: 0,
+        attachmentFileCount: 0
+    };
+    private fileAndFolder: FileAndFolder;
+
+
 
     constructor(leaf: WorkspaceLeaf, plugin: FileXPlugin) {
         super(leaf);
@@ -45,20 +47,9 @@ export class FileXControlView extends ItemView {
     }
 
     private initProperties() {
-        this.properties = this.plugin.settings.properties ? 
-            this.plugin.settings.properties.split(',') : 
+        this.properties = this.plugin.settings.properties ?
+            this.plugin.settings.properties.split(',') :
             [];
-    }
-
-    private getDomElement(selector: string): HTMLElement {
-        if (!this.domCache.has(selector)) {
-            const element = this.contentEl.querySelector(selector);
-            if (!element) {
-                throw new Error(`Element not found: ${selector}`);
-            }
-            this.domCache.set(selector, element as HTMLElement);
-        }
-        return this.domCache.get(selector)!;
     }
 
     getViewType() {
@@ -73,193 +64,226 @@ export class FileXControlView extends ItemView {
         return 'folder';
     }
 
+    async onClose() {
+        this.removeEventListeners();
+    }
+
+    public refresh() {
+        this.initProperties();
+        this.buildTable();
+    }
+
+    private setHtmlAndInitDomCache() {
+        this.contentEl.innerHTML = FileXHtmlBuilder.createHtml();
+        this.initDomCache();
+
+        const createHeader = () => {
+            this.properties.forEach(property => {
+                this.domCache.headerTr.createEl('th', { text: property, cls: 'sortable' });
+            });
+        }
+
+        createHeader();
+    }
+
+    private setHtmlIcon() {
+        const icons = {
+            'filex-icon-search': 'search',
+            'filex-icon-folder': 'folder-minus'
+        };
+
+        Object.entries(icons).forEach(([className, iconName]) => {
+            const element = this.contentEl.querySelector(`span.${className}`) as HTMLElement;
+            if (element) {
+                setIcon(element, iconName);
+            }
+        });
+    }
+
+    private initDomCache() {
+        this.domCache = {
+            contentEl: this.contentEl,
+            searchContainer: this.contentEl.querySelector('.search-container')!,
+            widgetContainer: this.contentEl.querySelector('.widget-container')!,
+            fileInfoContainer: this.contentEl.querySelector('.file-info-container')!,
+            tagsContainer: this.contentEl.querySelector('.tags-container')!,
+            multiSelectContainer: this.contentEl.querySelector('.multi-select-container')!,
+            tbody: this.contentEl.querySelector('tbody.file-list-body')!,
+            headerTr: this.contentEl.querySelector('thead.file-list-header tr')!,
+            folderPathContainer: this.contentEl.querySelector('.folder-path-container')!,
+            fileCount: this.contentEl.querySelector('.file-count')!
+        }
+    }
+
     async onOpen() {
-        this.setHtml();
+        this.setHtmlAndInitDomCache();
         this.setHtmlIcon();
         this.initListeners();
-        this.segmentClickHandler(SEGMENTS.VAULT);
+        this.totalFileCount = this.fileAPI.getTotalFileCount();
+        this.buildTable();
     }
 
     private initListeners() {
-        this.initSegmentListeners();
-        this.initOptionListeners();
-        this.initSearchListener();
-        this.initTableHeaders();
-        this.initCollapseListeners();
-    }
-
-    private initSegmentListeners() {
-        const segmentButtons = this.contentEl.querySelectorAll('.segment-button');
-        segmentButtons.forEach(button => {
-            button.addEventListener('click', () => this.segmentClickHandler(button.id));
-        });
-
-        const rootFolderButton = this.contentEl.querySelector('.file-info-container span.filex-icon-folder');
-        rootFolderButton?.addEventListener('click', () => this.segmentClickHandler(SEGMENTS.VAULT));
-    }
-
-    private initOptionListeners() {
-        type OptionKey = 'show-attachments' | 'show-md' | 'show-folder' | 'show-amount';
-        type OptionConfig = {
-            selector: string;
-            handler: () => void;
-        };
-
-        const options: Record<OptionKey, OptionConfig> = {
-            'show-attachments': {
-                selector: '.options-row .show-attachments',
-                handler: () => {
-                    this.showAttachments = !this.showAttachments;
-                    this.refresh();
-                }
-            },
-            'show-md': {
-                selector: '.options-row .show-md',
-                handler: () => {
-                    this.showMd = !this.showMd;
-                    this.refresh();
-                }
-            },
-            'show-folder': {
-                selector: '.options-row .show-folder',
-                handler: () => {
-                    this.showFolder = !this.showFolder;
-                    this.refresh();
-                }
-            },
-            'show-amount': {
-                selector: '.options-row .show-amount',
-                handler: () => {
-                    this.showAmount = !this.showAmount;
-                    this.refresh();
-                }
-            }
-        };
-
-        Object.values(options).forEach(({ selector, handler }) => {
-            const element = this.contentEl.querySelector(selector);
-            element?.addEventListener('click', handler);
-        });
-    }
-
-    private initSearchListener() {
-        const searchInput = this.contentEl.querySelector('.search-input') as HTMLInputElement;
-        if (!searchInput) return;
-
-        const debounce = (fn: Function, delay: number) => {
-            let timeoutId: NodeJS.Timeout;
-            return (...args: any[]) => {
-                clearTimeout(timeoutId);
-                timeoutId = setTimeout(() => fn.apply(this, args), delay);
+        const setSearchListener = () => {
+            const handleSearch = (e: Event) => {
+                const target = e.target as HTMLInputElement;
+                this.filter.searchText = target.value;
+                this.buildTable();
             };
-        };
 
-        const handleSearch = debounce((e: Event) => {
-            this.filter.searchText = (e.target as HTMLInputElement).value;
-            this.refresh();
-        }, 300);
-
-        searchInput.addEventListener('input', handleSearch);
-    }
-
-    private initTableHeaders() {
-        const headerTr = this.contentEl.querySelector(".file-list-header tr");
-        if (!headerTr) return;
-
-        const nameHeader = headerTr.querySelector('th');
-        if (nameHeader) {
-            nameHeader.addClass('sortable');
-            this.addSortListener(nameHeader, 'name');
+            const debouncedSearch = debounce(handleSearch, 300);
+            const searchInput = this.domCache.searchContainer.querySelector('input.search-input') as HTMLElement;
+            this.addEventListenerWithCleanup(searchInput, 'input', debouncedSearch);
         }
 
-        if (this.properties.length) {
-            const headerHtml = this.properties
-                .map(property => `<th class="sortable">${property}</th>`)
-                .join('');
-            headerTr.insertAdjacentHTML('beforeend', headerHtml);
+        const segmentClickHandler = (segmentKey: SegmentKey) => {
+            (segmentKey !== SegmentKey.Tag) ? this.domCache.tagsContainer.style.display = 'none' : (
+                this.domCache.tagsContainer.style.display = 'block',
+                this.buildTags()
+            );
+            this.domCache.widgetContainer.querySelector('.segment-button.active')?.classList.remove('active');
+            this.domCache.widgetContainer.querySelector(`#${segmentKey}`)?.classList.add('active');
+            this.filter.segment = segmentKey;
+            this.filter.action = Action.Segment;
+            this.buildTable();
+        }
 
-            headerTr.querySelectorAll('th.sortable').forEach(th => {
-                if (th !== nameHeader) {
-                    this.addSortListener(th as HTMLElement, th.textContent || '');
-                }
+        const setSegmentClickHandler = () => {
+            this.domCache.widgetContainer.querySelectorAll<HTMLButtonElement>("button.segment-button").forEach(button => {
+                this.addEventListenerWithCleanup(button, 'click',
+                    () => segmentClickHandler(button.id as SegmentKey));
             });
         }
-    }
 
-    private addSortListener(th: HTMLElement, column: string) {
-        th.addEventListener('click', () => {
-            this.contentEl.querySelectorAll('th.sortable').forEach(header => {
-                header.removeClass('sort-asc', 'sort-desc');
+        const checkBoxClickHandler = (checkboxKey: CheckboxKey) => {
+            this.filter.toggleCheckbox(checkboxKey);
+            this.filter.action = Action.Show;
+            this.buildTable();
+        }
+
+        const setCheckBoxClickHandler = () => {
+            this.domCache.widgetContainer.querySelectorAll<HTMLInputElement>("input.option-checkbox").forEach(checkbox => {
+                this.addEventListenerWithCleanup(checkbox, 'click',
+                    () => checkBoxClickHandler(checkbox.id as CheckboxKey));
             });
+        }
 
-            if (this.sortConfig.column === column) {
-                this.sortConfig.isDescending = !this.sortConfig.isDescending;
-            } else {
-                this.sortConfig.column = column;
-                this.sortConfig.isDescending = false;
+        const setRootFolderClickHandler = () => {
+            const folderIcon = this.domCache.fileInfoContainer.querySelector('span.filex-icon-folder')!;
+            this.addEventListenerWithCleanup(folderIcon as HTMLElement, 'click',
+                () => segmentClickHandler(SegmentKey.Vault));
+        }
+
+        const headerClickHandler = (th: HTMLElement) => {
+            this.contentEl.querySelectorAll('th.sortable').forEach(th => {
+                th.removeClass('sort-asc', 'sort-desc');
+            });
+            this.filter.action = Action.Sort;
+            this.filter.toggleSortOrder(th.textContent!);
+            th.addClass(this.filter.sortAccending ? 'sort-asc' : 'sort-desc');
+            this.buildTable();
+        }
+
+        const setHeaderClickHandler = () => {
+            this.domCache.headerTr.querySelectorAll<HTMLTableCellElement>('th.sortable')!.forEach(th => {
+                this.addEventListenerWithCleanup(th, 'click',
+                    () => headerClickHandler(th));
+            });
+        }
+
+        const setCollapseListeners = () => {
+            const widgetCollapseBtn = this.contentEl.querySelector<HTMLElement>('.widget-container .collapse-button');
+            const widgetContent = this.contentEl.querySelector<HTMLElement>('.widget-container .widget-content');
+            if (widgetCollapseBtn && widgetContent) {
+                this.addEventListenerWithCleanup(widgetCollapseBtn, 'click', () => {
+                    widgetContent.classList.toggle('collapsed');
+                    widgetCollapseBtn.classList.toggle('collapsed');
+                });
             }
 
-            th.addClass(this.sortConfig.isDescending ? 'sort-desc' : 'sort-asc');
+            const tagsCollapseBtn = this.contentEl.querySelector<HTMLElement>('.tags-container .collapse-button');
+            const tagsContent = this.contentEl.querySelector<HTMLElement>('.tags-container .tags-content');
+            if (tagsCollapseBtn && tagsContent) {
+                this.addEventListenerWithCleanup(tagsCollapseBtn, 'click', () => {
+                    tagsContent.classList.toggle('collapsed');
+                    tagsCollapseBtn.classList.toggle('collapsed');
+                });
+            }
+        }
 
-            this.refresh();
+        const setTagClickListener = () => {
+            this.addEventListenerWithCleanup(this.domCache.tagsContainer, 'click', (event: MouseEvent) => {
+                if (event.target instanceof HTMLElement) {
+                    const tagSpan = event.target.closest('.tag-span');
+                    if (tagSpan instanceof HTMLElement) {
+                        this.filter.tags = [tagSpan.textContent!];
+                        this.buildTable();
+
+                        const multiSelectContainer = this.domCache.multiSelectContainer;
+                        multiSelectContainer.parentElement?.querySelectorAll('.multi-select-pill').forEach(pill => {
+                            pill.classList.remove('is-active');
+                        });
+                        tagSpan.closest('.multi-select-pill')?.classList.add('is-active');
+                    }
+                }
+                Debug.log("click fail", event.target);
+            });
+        }
+
+        setSearchListener();
+        setSegmentClickHandler();
+        setCheckBoxClickHandler();
+        setRootFolderClickHandler();
+        setHeaderClickHandler();
+        setCollapseListeners();
+        setTagClickListener();
+    }
+
+    private eventListeners: Array<{ element: HTMLElement, event: string, handler: EventListener }> = [];
+
+    private addEventListenerWithCleanup(element: HTMLElement, event: string, handler: EventListener) {
+        element.addEventListener(event, handler);
+        this.eventListeners.push({ element, event, handler });
+    }
+
+    private removeEventListeners() {
+        this.eventListeners.forEach(({ element, event, handler }) => {
+            element.removeEventListener(event, handler);
+        });
+        this.eventListeners = [];
+    }
+
+    // private calculateTagFileCount(tagName: string): number {
+    //     if (this.tagCountCache.has(tagName)) {
+    //         return this.tagCountCache.get(tagName)!;
+    //     }
+
+    //     const allFiles = this.fileAPI.getAllFiles();
+    //     const count = allFiles.filter(file => {
+    //         const cache = this.app.metadataCache.getFileCache(file);
+    //         if (!cache) return false;
+    //         const fileTags = getAllTags(cache);
+    //         return fileTags && fileTags.includes(tagName);
+    //     }).length;
+
+    //     this.tagCountCache.set(tagName, count);
+    //     return count;
+    // }
+
+    private buildTags() {
+        const multiSelectContainer = this.domCache.multiSelectContainer;
+        multiSelectContainer.innerHTML = '';
+
+        this.fileAPI.getAllTagNames().forEach(tagName => {
+            multiSelectContainer.createEl('div', { cls: 'multi-select-pill tag-span' })
+                .createEl('div', { cls: 'multi-select-pill-content' }).createEl('span', { text: tagName });
         });
     }
 
-    private async saveFileFrontmatter(file: TFile, map: Record<string, any>) {
-        try {
-            const content = await this.app.vault.read(file);
-            const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
-
-            if (frontmatter) {
-                Object.assign(frontmatter, map);
-                const newFrontmatterStr = YAML.stringify(frontmatter);
-                const newContent = content.replace(/^---\n([\s\S]*?)\n---/, `---\n${newFrontmatterStr}---`);
-                await this.app.vault.modify(file, newContent);
-                new Notice(`檔案 ${file.basename} 的 frontmatter 已更新`);
-            } else {
-                const newFrontmatter = YAML.stringify(map);
-                const newContent = `---\n${newFrontmatter}---\n\n${content}`;
-                await this.app.vault.modify(file, newContent);
-                new Notice(`檔案 ${file.basename} 添加新的 frontmatter`);
-            }
-        } catch (error) {
-            new Notice(`更新 frontmatter 失敗: ${error.message}`);
-            console.error('Error updating frontmatter:', error);
-        }
-    }
-
-    private setTrInnerHtml(tr: HTMLElement, data: TFolder | TFile, mode: 'folder' | 'file') {
-        const td = tr.createEl('td');
-        const a = td.createEl('a', { href: '#' });
-
-        tr.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            this.showFileMenu(e, data);
-        });
-
-        const createFolderRow = (a: HTMLAnchorElement, folder: TFolder) => {
-            setIcon(a, 'folder');
-            const nameSpan = a.createEl('span', { text: folder.name });
-            
-            if (this.showAmount) {
-                const fileCount = this.calculateFolderFileCount(folder);
-                if (fileCount > 0) {
-                    nameSpan.createEl('span', {
-                        text: ` (${fileCount})`,
-                        cls: 'file-amount'
-                    });
-                }
-            }
-
-            a.addEventListener('click', () => {
-                this.buildTableByTFolder(folder);
-                this.buildFileInfoPath(folder.path);
-            });
-        }
-
-        const createFileRow = (a: HTMLAnchorElement, file: TFile, tr: HTMLElement) => {
-            a.addClass('file-link');
-            setIcon(a.createEl('span', { cls: 'filex-icon filex-icon-file' }), 'file');
+    private buildTable() {
+        const createFileRow = (tr: HTMLElement, file: TFile) => {
+            const a = tr.createEl('td').createEl('a', { href: '#', cls: 'file-link' });
+            setIcon(a, 'file');
             a.createEl('span', { text: file.name });
             a.addEventListener('click', () => {
                 const leaves = this.app.workspace.getLeavesOfType('markdown');
@@ -275,7 +299,7 @@ export class FileXControlView extends ItemView {
                 }
             });
 
-            if(file.extension !== 'md'){
+            if (!this.fileAPI.isMdExtension(file)) {
                 this.properties.forEach(() => tr.createEl('td'));
                 return;
             }
@@ -294,7 +318,7 @@ export class FileXControlView extends ItemView {
                         const oldValue = fileCache?.frontmatter?.[property] || '';
 
                         if (newValue !== oldValue) {
-                            await this.saveFileFrontmatter(file, {
+                            await this.fileAPI.saveFileFrontmatter(file, {
                                 [property]: newValue
                             });
                         }
@@ -303,513 +327,139 @@ export class FileXControlView extends ItemView {
             });
         }
 
-        if (mode === 'folder') {
-            createFolderRow(a, data as TFolder);
-            this.properties.forEach(() => tr.createEl('td'));
-        } else {
-            createFileRow(a, data as TFile, tr);
-        }
-    }
+        const createFolderRow = (tr: HTMLElement, folder: TFolder) => {
+            const a = tr.createEl('td').createEl('a', { href: '#', cls: 'folder-link' });
+            setIcon(a, 'folder');
+            const nameSpan = a.createEl('span', { text: folder.name });
 
-    private setTagHtml(target: HTMLElement, tagName: string) {
-        const tagsClickHandler = () => {
-            this.filter.tags = [tagName];
-            this.buildTableByTFolder(this.fileAPI.getRoot()!);
-            
-            target.parentElement?.querySelectorAll('.multi-select-pill').forEach(pill => {
-                pill.classList.remove('is-active');
-            });
-            tagNameEle.parentElement?.classList.add('is-active');
-        }
-
-        let tagNameEle = target.createEl('div', { cls: 'multi-select-pill' })
-            .createEl('div', { cls: 'multi-select-pill-content' });
-        
-        tagNameEle.addEventListener('click', tagsClickHandler);
-        const tagSpan = tagNameEle.createEl('span', { text: tagName });
-
-        if (this.showAmount) {
-            const tagCount = this.calculateTagFileCount(tagName);
-            if (tagCount > 0) {
-                tagSpan.createEl('span', {
-                    text: ` (${tagCount})`,
-                    cls: 'file-amount'
-                });
-            }
-        }
-    }
-
-    private calculateFolderFileCount(folder: TFolder): number {
-        let count = 0;
-        folder.children.forEach(child => {
-            if (child instanceof TFile) {
-                const isMdOrCanva = this.fileAPI.isObsidianExtension(child.extension);
-                if ((isMdOrCanva && this.showMd) || (!isMdOrCanva && this.showAttachments)) {
-                    count++;
+            if (this.filter.showAmount) {
+                const fileAndFolderCounter: FileAndFolderCounter = this.fileAPI.calculateFileCountInFolder(folder);
+                const fileCount = fileAndFolderCounter.mdFileCount + fileAndFolderCounter.canvaFileCount + fileAndFolderCounter.attachmentFileCount;
+                if (fileCount > 0) {
+                    nameSpan.createEl('span', {
+                        text: ` (${fileCount})`,
+                        cls: 'file-amount'
+                    });
                 }
-            } else if (child instanceof TFolder) {
-                count += this.calculateFolderFileCount(child);
             }
-        });
-        return count;
-    }
 
-    private calculateTagFileCount(tagName: string): number {
-        const allFiles = this.fileAPI.getAllFiles();
-        return allFiles.filter(file => {
-            const cache = this.app.metadataCache.getFileCache(file);
-            if (!cache) return false;
-            const fileTags = getAllTags(cache);
-            return fileTags && fileTags.includes(tagName);
-        }).length;
-    }
-
-    buildTableByFolderPath(folderPath: string) {
-        let tFolder: TFolder = this.fileAPI.getTFolderByFolderPath(folderPath)!;
-        this.buildFileInfoPath(folderPath);
-        this.filter.folderPath = folderPath;
-        this.buildTableByTFolder(tFolder);
-    }
-
-    buildTableByTFolder(tFolder: TFolder) {
-        const tbody = this.getDomElement("tbody.file-list-body");
-        tbody.innerHTML = '';
-
-        if (this.filter.segment === SEGMENTS.TAG) {
-            this.buildTagTable(tbody);
-        } else {
-            this.buildFolderTable(tbody, tFolder);
-        }
-    }
-
-    private buildTagTable(tbody: HTMLElement) {
-        const allFiles = this.fileAPI.getAllFiles();
-        const filteredFiles = this.fileAPI.filterItems(allFiles, this.filter);
-        
-        this.renderFileList(tbody, filteredFiles);
-    }
-
-    private buildFolderTable(tbody: HTMLElement, tFolder: TFolder) {
-        const tFolderFolderList = this.fileAPI.filterFolders(
-            this.fileAPI.sortFolder(tFolder.children.filter(folder => folder instanceof TFolder)),
-            this.filter
-        );
-
-        const tFolderFileList = this.fileAPI.filterItems(
-            this.fileAPI.sortFile(tFolder.children.filter(file => file instanceof TFile)),
-            this.filter
-        );
-
-        if (this.sortConfig.isDescending) {
-            tFolderFolderList.reverse();
-            tFolderFileList.reverse();
-        }
-
-        if (this.showFolder) {
-            tFolderFolderList.forEach(folder => {
-                this.setTrInnerHtml(tbody.createEl('tr'), folder, "folder");
+            a.addEventListener('click', () => {
+                this.filter.folderPath = folder.path;
+                this.filter.action = Action.Folder;
+                this.buildTable();
             });
+            this.properties.forEach(() => tr.createEl('td'));
         }
+        const fragment = document.createDocumentFragment();
+        this.fileAndFolder = this.fileAPI.getFileAndFolderByFilter(this.filter);
 
-        this.renderFileList(tbody, tFolderFileList);
+        this.fileAndFolder.folders.forEach(folder => {
+            const tr = document.createElement('tr');
+            createFolderRow(tr, folder);
+            fragment.appendChild(tr);
+        });
+
+        this.fileAndFolder.files.forEach(file => {
+            const tr = document.createElement('tr');
+            createFileRow(tr, file);
+            fragment.appendChild(tr);
+        });
+
+        this.buildInfo();
+
+        // if (this.uiFilter.showAmount) {
+        //     const tagCount = this.calculateTagFileCount(tagName);
+        //     if (tagCount > 0) {
+        //         tagSpan.createEl('span', {
+        //             text: ` (${tagCount})`,
+        //             cls: 'file-amount'
+        //         });
+        //     }
+        // }
+
+        this.domCache.tbody.innerHTML = '';
+        this.domCache.tbody.appendChild(fragment);
     }
 
-    private renderFileList(tbody: HTMLElement, files: TFile[]) {
-        files.forEach(file => {
-            const isMdOrCanva = this.fileAPI.isObsidianExtension(file.extension);
-            if ((isMdOrCanva && !this.showMd) || (!isMdOrCanva && !this.showAttachments)) {
+    buildInfo() {
+        const debouncedGetTotalFileCount = debounce(() => {
+            this.countRunnigStatus = false;
+            console.log("b", this.countRunnigStatus);
+        }, 300000);
+
+        if (!this.countRunnigStatus) {
+            this.countRunnigStatus = true;
+            debouncedGetTotalFileCount();
+        }
+
+
+        const fileCountSpan = this.domCache.fileCount;
+        fileCountSpan.innerHTML = '';
+        let fileCount = 0;
+        let visibleCount = this.fileAndFolder.files.length;
+        (this.filter.showMdAndCanvas) ? fileCount += this.totalFileCount.mdFileCount + this.totalFileCount.canvaFileCount : null;
+        (this.filter.showAttachment) ? fileCount += this.totalFileCount.attachmentFileCount : null;
+        fileCountSpan.setText(`${visibleCount} / ${fileCount} files`);
+
+        if (isFolderChangeAction(this.filter.action)) {
+            const folderPathContainer = this.domCache.folderPathContainer;
+            if (this.filter.action === Action.Folder || this.filter.segment === SegmentKey.Vault) {
+                folderPathContainer.innerHTML = '';
+                folderPathContainer.createEl('span', { text: " / " });
+                if (this.filter.folderPath == ROOT_FOLDER_PATH) return;
+
+                let absolutePath = "";
+                this.filter.folderPath.split(ROOT_FOLDER_PATH).forEach(folderName => {
+                    absolutePath += folderName;
+                    let currentAbsolutePath = absolutePath;
+
+                    const pathItem = folderPathContainer.createEl('span', {
+                        text: folderName,
+                        cls: 'folder-path-item'
+                    });
+
+                    pathItem.addEventListener('click', () => {
+                        this.filter.folderPath = currentAbsolutePath;
+                        this.filter.action = Action.Folder;
+                        this.buildTable();
+                    });
+
+                    pathItem.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        const folder = this.fileAPI.getTFolderByFolderPath(currentAbsolutePath);
+                        if (folder) {
+                            this.showFileMenu(e, folder);
+                        }
+                    });
+
+                    folderPathContainer.createEl('span', { text: " / " });
+                    absolutePath += "/";
+                });
+            } else if (this.filter.segment === SegmentKey.Tag) {
+                folderPathContainer.innerHTML = '';
+                if (this.filter.tags && this.filter.tags.length > 0) {
+                    const tagName = this.filter.tags[0];
+                    folderPathContainer.createEl('span', {
+                        text: tagName,
+                        cls: 'tag-path-item'
+                    });
+                } else {
+                    folderPathContainer.createEl('span', {
+                        text: "#Tags",
+                        cls: 'tag-path-item'
+                    });
+                }
                 return;
             }
-            this.setTrInnerHtml(tbody.createEl('tr'), file, "file");
-        });
+
+        }
+
+
     }
 
-    buildFileInfoPath(folderPath: string) {
-        let folderPathContainer = this.contentEl.querySelector('.folder-path-container')!;
-        let fileCountSpan = this.contentEl.querySelector('.file-count')!;
-        folderPathContainer.innerHTML = '';
 
-        const calculateFileCount = (files: TFile[]) => {
-            let totalCount = 0;
-            let visibleCount = 0;
-
-            files.forEach(file => {
-                const isMdOrCanva = this.fileAPI.isObsidianExtension(file.extension);
-                
-                if (isMdOrCanva && this.showMd) {
-                    totalCount++;
-                    if (this.fileAPI.filterItems([file], this.filter).length > 0) {
-                        visibleCount++;
-                    }
-                } else if (!isMdOrCanva && this.showAttachments) {
-                    totalCount++;
-                    if (this.fileAPI.filterItems([file], this.filter).length > 0) {
-                        visibleCount++;
-                    }
-                }
-            });
-
-            return { visibleCount, totalCount };
-        };
-
-        let fileCount;
-        if (this.filter.segment === SEGMENTS.TAG) {
-            fileCount = calculateFileCount(this.fileAPI.getAllFiles());
-        } else if (this.filter.segment === SEGMENTS.ALL_FILES) {
-            fileCount = calculateFileCount(this.fileAPI.getAllFiles());
-        } else {
-            const currentFolder = this.fileAPI.getTFolderByFolderPath(folderPath);
-            if (currentFolder) {
-                fileCount = calculateFileCount(currentFolder.children.filter(child => child instanceof TFile) as TFile[]);
-            } else {
-                fileCount = { visibleCount: 0, totalCount: 0 };
-            }
-        }
-
-        fileCountSpan.setText(`${fileCount.visibleCount} / ${fileCount.totalCount} files`);
-
-        if (this.filter.segment === SEGMENTS.TAG) {
-            if (this.filter.tags && this.filter.tags.length > 0) {
-                const tagName = this.filter.tags[0];
-                folderPathContainer.createEl('span', { 
-                    text: tagName,
-                    cls: 'tag-path-item'
-                });
-            } else {
-                folderPathContainer.createEl('span', { 
-                    text: "Tags",
-                    cls: 'tag-path-item'
-                });
-            }
-            return;
-        }
-
-        folderPathContainer.createEl('span', { text: " / " });
-        if (folderPath == "/") return;
-
-        let absolutePath = "";
-        folderPath.split('/').forEach(folderName => {
-            absolutePath += folderName;
-            let currentAbsolutePath = absolutePath;
-            
-            const pathItem = folderPathContainer.createEl('span', { 
-                text: folderName, 
-                cls: 'folder-path-item' 
-            });
-
-            pathItem.addEventListener('click', () => {
-                this.buildTableByFolderPath(currentAbsolutePath);
-            });
-
-            pathItem.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                const folder = this.fileAPI.getTFolderByFolderPath(currentAbsolutePath);
-                if (folder) {
-                    this.showFileMenu(e, folder);
-                }
-            });
-
-            folderPathContainer.createEl('span', { text: " / " });
-            absolutePath += "/";
-        });
-    }
-
-    public refresh() {
-        if (this.plugin.settings.properties != '') {
-            this.properties = this.plugin.settings.properties.split(',');
-        } else {
-            this.properties = [];
-        }
-
-        switch (this.filter.segment) {
-            case SEGMENTS.VAULT:
-            case SEGMENTS.TAG:
-                this.buildTableByTFolder(this.fileAPI.getRoot()!);
-                break;
-            case SEGMENTS.FOLDER_L2:
-                this.segmentClickHandler(SEGMENTS.FOLDER_L2);
-                break;
-            case SEGMENTS.ALL_FILES:
-                this.segmentClickHandler(SEGMENTS.ALL_FILES);
-                break;
-        }
-    }
-
-    segmentClickHandler(tab: string) {
-        let tagsContainer: HTMLElement = this.contentEl.querySelector('.tags-container')!;
-        tagsContainer.style.display = 'none';
-
-        this.contentEl.querySelector('.segment-button.active')?.classList.remove('active');
-        this.contentEl.querySelector(`#${tab}`)?.classList.add('active');
-
-        this.filter.segment = tab as FileXFilter['segment'];
-
-        if (tab === SEGMENTS.VAULT) {
-            this.buildFileInfoPath(this.fileAPI.getRoot()!.path);
-            this.buildTableByTFolder(this.fileAPI.getRoot()!);
-            console.log('vault init');
-
-        } else if (tab === SEGMENTS.FOLDER_L2) {
-            this.showFolder = true;
-            this.buildFileInfoPath(this.fileAPI.getRoot()!.path);
-            let tFolderList: TFolder[] = this.fileAPI.sortFolder(
-                this.fileAPI.getAllFoders().filter(folder => folder.path.split('/').length == 2)
-            );
-
-            let tbody = this.contentEl.querySelector("tbody.file-list-body")!;
-            tbody.innerHTML = '';
-            tFolderList.forEach(Folder => {
-                this.setTrInnerHtml(tbody.createEl('tr'), Folder, "folder");
-            });
-
-            console.log('folder-l2 clicked');
-
-        } else if (tab === SEGMENTS.ALL_FILES) {
-            this.buildFileInfoPath(this.fileAPI.getRoot()!.path);
-            
-            let tbody = this.contentEl.querySelector("tbody.file-list-body")!;
-            tbody.innerHTML = '';
-            
-            let allFiles = this.fileAPI.getAllFiles();
-            let filteredFiles = this.fileAPI.filterItems(allFiles, this.filter);
-            
-            filteredFiles = this.fileAPI.sortFile(filteredFiles);
-            if (this.sortConfig.isDescending) {
-                filteredFiles.reverse();
-            }
-
-            filteredFiles.forEach(file => {
-                if ((this.fileAPI.isObsidianExtension(file.extension)) && !this.showMd) return;
-                if (!this.fileAPI.isObsidianExtension(file.extension) && !this.showAttachments) return;
-                this.setTrInnerHtml(tbody.createEl('tr'), file, "file");
-            });
-
-        } else if (tab === SEGMENTS.NOT_LINK) {
-            this.buildFileInfoPath(this.fileAPI.getRoot()!.path);
-            
-            let tbody = this.contentEl.querySelector("tbody.file-list-body")!;
-            tbody.innerHTML = '';
-            
-            let unlinkedFiles = this.fileAPI.getUnlinkedFiles();
-            let filteredFiles = this.fileAPI.filterItems(unlinkedFiles, this.filter);
-            
-            filteredFiles = this.fileAPI.sortFile(filteredFiles);
-            if (this.sortConfig.isDescending) {
-                filteredFiles.reverse();
-            }
-
-            filteredFiles.forEach(file => {
-                if (!this.showAttachments) return;
-                this.setTrInnerHtml(tbody.createEl('tr'), file, "file");
-            });
-
-        } else if (tab === SEGMENTS.TAG) {
-            let tagContainer = tagsContainer.querySelector('.multi-select-container')!;
-            tagContainer.innerHTML = '';
-            
-            this.filter = {
-                segment: SEGMENTS.TAG,
-                tags: []
-            };
-            
-            this.buildFileInfoPath('');
-            
-            tagsContainer.style.display = 'block';
-            let tagNameList: string[] = this.fileAPI.getAllTagNames();
-            tagNameList.forEach(tagName => {
-                this.setTagHtml(tagContainer as HTMLElement, tagName);
-            });
-            
-            this.filter.searchText = '';
-            (this.contentEl.querySelector('.search-input') as HTMLInputElement).value = '';
-        }
-    }
 
     private showFileMenu(e: MouseEvent, file: TAbstractFile) {
         return this.menu.showMenu(e, file);
     }
-
-    async onClose() {
-        // 清理工作
-    }
-
-    private setHtml() {
-        const html = `
-            <div class="filex-control-container">
-                ${this.createSearchSection()}
-                ${this.createWidgetSection()}
-                ${this.createFileInfoSection()}
-                ${this.createTagsSection()}
-                ${this.createFileListSection()}
-            </div>
-        `;
-        this.contentEl.innerHTML = html;
-    }
-
-    private createSearchSection(): string {
-        return `
-            <div class="search-container">
-                <span class="filex-icon filex-icon-search">s</span>
-                <input type="text" class="search-input" placeholder="搜尋檔案...">
-            </div>
-        `;
-    }
-
-    private createWidgetSection(): string {
-        const segments = [
-            { id: SEGMENTS.VAULT, text: 'Vault', active: true },
-            { id: SEGMENTS.FOLDER_L2, text: 'Folder L2' },
-            { id: SEGMENTS.ALL_FILES, text: 'All files' },
-            { id: SEGMENTS.NOT_LINK, text: 'Not Linked' },
-            { id: SEGMENTS.TAG, text: 'Tag' }
-        ];
-
-        const options = [
-            { name: 'show atta', class: 'show-attachments', checked: true },
-            { name: 'show md/canva', class: 'show-md', checked: true },
-            { name: 'show folder', class: 'show-folder', checked: true },
-            { name: 'show amount', class: 'show-amount', checked: false }
-        ];
-
-        return `
-            <div class="widget-container">
-                <div class="widget-header">
-                    <div class="collapse-button">
-                        <span class="collapse-icon"></span>
-                    </div>
-                </div>
-                <div class="widget-content">
-                    <div class="button-row">
-                        ${segments.map(segment => `
-                            <button class="segment-button${segment.active ? ' active' : ''}" id="${segment.id}">
-                                ${segment.text}
-                            </button>
-                        `).join('')}
-                    </div>
-                    <hr/>
-                    <div class="options-row">
-                        <div class="checkbox-group">
-                            ${options.map(option => `
-                                <label>
-                                    <input type="checkbox" class="${option.class}"${option.checked ? ' checked' : ''}>
-                                    ${option.name}
-                                </label>
-                            `).join('')}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    private createFileInfoSection(): string {
-        return `
-            <div class="file-info-container">
-                <span class="folder-path">
-                    <span class="filex-icon filex-icon-folder"></span>
-                    <span class="folder-path-container"></span>
-                </span>
-                <span class="file-count"></span>
-            </div>
-        `;
-    }
-
-    private createTagsSection(): string {
-        return `
-            <div class="tags-container">
-                <div class="tags-header">
-                    <div class="collapse-button">
-                        <span class="collapse-icon"></span>
-                    </div>
-                </div>
-                <div class="tags-content">
-                    <div class="metadata-property" tabindex="0" data-property-key="tags" data-property-type="multitext">
-                        <div class="metadata-property-value">
-                            <div class="multi-select-container"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    private createFileListSection(): string {
-        return `
-            <div class="file-list-container">
-                <table class="file-list-table">
-                    <thead class="file-list-header">
-                        <tr>
-                            <th>name</th>
-                        </tr>
-                    </thead>
-                    <tbody class="file-list-body"></tbody>
-                </table>
-            </div>
-        `;
-    }
-
-    private setHtmlIcon() {
-        const icons = {
-            'filex-icon-search': 'search',
-            'filex-icon-folder': 'folder-minus'
-        };
-
-        Object.entries(icons).forEach(([className, iconName]) => {
-            const element = this.contentEl.querySelector(`span.${className}`) as HTMLElement;
-            if (element) {
-                setIcon(element, iconName);
-            }
-        });
-    }
-
-    static handleBreadcrumbClick(app: App, path: string) {
-        const leaves = app.workspace.getLeavesOfType(VIEW_TYPE_FILEX_CONTROL);
-        if (leaves.length > 0) {
-            const view = leaves[0].view as FileXControlView;
-            view.buildTableByFolderPath(path);
-            app.workspace.revealLeaf(leaves[0]);
-        }
-    }
-
-    private initCollapseListeners() {
-        const widgetCollapseBtn = this.contentEl.querySelector('.widget-container .collapse-button');
-        const widgetContent = this.contentEl.querySelector('.widget-container .widget-content');
-        if (widgetCollapseBtn && widgetContent) {
-            widgetCollapseBtn.addEventListener('click', () => {
-                widgetContent.classList.toggle('collapsed');
-                widgetCollapseBtn.classList.toggle('collapsed');
-            });
-        }
-
-        const tagsCollapseBtn = this.contentEl.querySelector('.tags-container .collapse-button');
-        const tagsContent = this.contentEl.querySelector('.tags-container .tags-content');
-        if (tagsCollapseBtn && tagsContent) {
-            tagsCollapseBtn.addEventListener('click', () => {
-                tagsContent.classList.toggle('collapsed');
-                tagsCollapseBtn.classList.toggle('collapsed');
-            });
-        }
-    }
-}
-
-export function initBreadcrumbListener(app: App) {
-    const handleClick = (event: MouseEvent) => {
-        const target = event.target as HTMLElement;
-        if (target && target.matches('.view-header-breadcrumb')) {
-            const breadcrumbs = Array.from(target.closest('.view-header-title-parent')?.querySelectorAll('.view-header-breadcrumb') || []);
-            const currentIndex = breadcrumbs.indexOf(target);
-            
-            if (currentIndex !== -1) {
-                const fullPath = breadcrumbs
-                    .slice(0, currentIndex + 1)
-                    .map(el => el.textContent)
-                    .filter(text => text)
-                    .join('/');
-                
-                FileXControlView.handleBreadcrumbClick(app, fullPath);
-            }
-        }
-    };
-
-    document.addEventListener('click', handleClick, true);
 }

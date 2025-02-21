@@ -1,8 +1,9 @@
 .filex-control-container {
     display: flex;
     flex-direction: column;
+    /* align-items: center; */
     height: 100%;
-    overflow: hidden;
+    /* overflow: hidden; */
 
     .search-container {
         display: flex;
@@ -39,7 +40,7 @@
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 
         .widget-header {
-            padding: 8px 16px;
+            padding: 0.12rem 0.8rem;
             display: flex;
             align-items: center;
             border-bottom: 1px solid var(--background-modifier-border);
@@ -114,7 +115,7 @@
             margin: 16px 0;
         }
 
-        .options-row {
+        .operation-row {
             display: flex;
             flex-direction: row;
             gap: 12px;
@@ -177,6 +178,9 @@
         padding: 12px 16px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         color: var(--text-accent);
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
 
         .folder-path {
             display: flex;
@@ -184,25 +188,25 @@
             align-items: center;
         }
 
-        span.filex-icon-folder{
+        span.filex-icon-folder {
             padding: 0.15rem 0.15rem 0 0.15rem;
             border-radius: 0.2rem;
         }
 
-        span.filex-icon-folder:hover{
+        span.filex-icon-folder:hover {
             cursor: pointer;
             background-color: var(--background-modifier-hover);
         }
 
-        span.folder-path-container{
+        span.folder-path-container {
             padding: 0.05rem 0 0 0;
         }
 
-        span.folder-path-item{
+        span.folder-path-item {
             padding: 0.1rem 0.1rem 0.1rem 0.1rem;
         }
 
-        span.folder-path-item:hover{
+        span.folder-path-item:hover {
             cursor: pointer;
             background-color: var(--background-modifier-hover);
             border-radius: 0.2rem;
@@ -226,44 +230,44 @@
         flex: 1;
         display: flex;
         flex-direction: column;
-        overflow: hidden;
+        overflow: auto;
 
         .file-list-table {
             width: 100%;
             border-collapse: collapse;
             font-size: 14px;
-            display: flex;
-            flex-direction: column;
-            height: 100%;
+            padding-bottom: 10px;
         }
 
         .file-list-header {
             background-color: var(--background-secondary);
             border-bottom: 1px solid var(--background-modifier-border);
+
+            tr {
+                position: sticky;
+                top: 0;
+                box-shadow: 0 1px 0 var(--background-modifier-border);
+            }
+
+            th {
+                padding: 10px 16px;
+                text-align: left;
+                color: var(--text-muted);
+                font-weight: 500;
+                font-size: 13px;
+                background-color: var(--background-secondary);
+            }
         }
 
         .file-list-body {
-            flex: 1;
-            overflow-y: auto;
-            display: block;
-        }
-
-        .file-list-header th {
-            padding: 10px 16px;
-            text-align: left;
-            color: var(--text-muted);
-            font-weight: 500;
-            font-size: 13px;
+            
         }
 
         .file-list-body tr {
             width: 100%;
             border-bottom: 1px solid var(--background-modifier-border);
             transition: background-color 0.2s ease;
-        }
-
-        .file-list-body tr:last-child {
-            border-bottom: none;
+            height: 1rem !important;
         }
 
         .file-list-table tr:hover {
@@ -277,7 +281,7 @@
             width: auto;
         }
 
-        .file-list-body td:first-child{
+        .file-list-body td:first-child {
             width: 15%;
         }
 
@@ -289,14 +293,14 @@
             display: flex;
             flex-direction: row;
             align-items: center;
-            width: fit-content;
+            height: 0.8rem !important;
         }
 
         .file-list-body .file-link {
             margin-left: 0.5rem;
         }
 
-        .file-list-body tr input{
+        .file-list-body tr input {
             -webkit-app-region: no-drag;
             background: var(--background-modifier-form-field);
             border: var(--input-border-width) solid var(--background-modifier-border);
@@ -307,12 +311,14 @@
             border-radius: var(--input-radius);
             outline: none;
         }
-        .file-list-body tr input:focus{
+
+        .file-list-body tr input:focus {
             box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
         }
     }
 
     .tags-container {
+        display: none;
         margin-top: 16px;
         background-color: var(--background-primary);
         padding: 0;
@@ -320,7 +326,7 @@
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 
         .tags-header {
-            padding: 8px 16px;
+            padding: 0.12rem 0.8rem;
             display: flex;
             align-items: center;
             border-bottom: 1px solid var(--background-modifier-border);
@@ -383,7 +389,7 @@
 }
 
 @media screen and (min-width: 768px) {
-    .options-row {
+    .operation-row {
         flex-direction: row;
         justify-content: space-between;
         align-items: center;
