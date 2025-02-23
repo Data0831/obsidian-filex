@@ -1,7 +1,7 @@
 {
 	"name": "obsidian-filex",
-	"version": "1.0.0",
-	"description": "an obsidian plugin to help you manage your files",
+	"version": "1.0.1",
+	"description": "an obsidian plugin easy to edit property of file",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",

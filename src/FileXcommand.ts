@@ -1,16 +1,15 @@
 import FileXPlugin from "../main";
-import { VIEW_TYPE_FILEX } from "./FileXView";
 import { FileXView } from "./FileXView";
-import { getAllTags, Notice, MarkdownView, ItemView } from "obsidian";
-import { FileAPI } from "./FileAPI";
+import { getAllTags, Notice, MarkdownView } from "obsidian";
+import { TabstractFileMapHandler } from "./TabstractFileMapHandler";
 import { TagSelectModal } from "./TagSelectModal";
-import { Filter, Action } from "./Filter";
-import { SegmentKey } from './FileXHtml';
+import { Filter, } from "./Filter";
 import { activeView, getView } from './viewUtile';
+import { Segment, Action, Command, VIEW_TYPE_FILEX } from "./Lib";
 
 export default function registerCommands(plugin: FileXPlugin) {
     const activeFileXControlView = () => activeView(plugin.app, VIEW_TYPE_FILEX);
-    
+
     plugin.addCommand({
         id: 'open-filex-control',
         name: 'open filex control',
@@ -89,22 +88,21 @@ export default function registerCommands(plugin: FileXPlugin) {
 
             new TagSelectModal(plugin.app, fileTags, (selectedTag: string) => {
                 new Notice(`已選擇標籤：${selectedTag}`);
-                const fileAPI = new FileAPI(plugin.app.workspace.getActiveViewOfType(ItemView)!);
-                const filter = new Filter(SegmentKey.Tag, Action.Segment);
-                fileAPI.getFileAndFolderByFilter(filter);
-                filter.action = Action.Tag;
-                filter.tags = [selectedTag];
-                const allFiles = fileAPI.getFileAndFolderByFilter(filter).files;
-                const filteredFiles = fileAPI.sortFile(allFiles);
-                console.log(selectedTag, filteredFiles);
+                const tabstractFileMapHandler = TabstractFileMapHandler.getInstance(plugin.app);
+                const filter = Filter.CommandFilter(Command.GenLink);
+                filter.tags = new Set([selectedTag]);
+                filter.action = Action.Command;
                 
+                const allFiles = tabstractFileMapHandler.queryByFilter(filter).files;
+                console.log(selectedTag, allFiles);
+
                 const editor = plugin.app.workspace.activeEditor?.editor;
                 if (editor) {
-                    const links = filteredFiles
+                    const links = allFiles
                         .filter(file => file.path !== activeFile.path)
                         .map(file => `- [[${file.basename}]]`)
                         .join('\n');
-                    
+
                     if (links) {
                         const cursor = editor.getCursor();
                         editor.replaceRange('\n' + links + '\n', cursor);

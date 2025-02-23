@@ -1,50 +1,18 @@
-import { SegmentKey, CheckboxKey } from './FileXHtml';
-import {  ROOT_FOLDER_PATH } from './Lib';
-
-export enum Action {
-    Search = 'search',
-    Segment = 'segment',
-    Folder = 'folder',
-    Tag = 'tag',
-    Command = 'command',
-
-    Show = 'show',
-    Sort = 'sort',
-
-    None = 'none',
-}
-
-export function isFileChangeAction(action: Action): boolean {
-    return action === Action.Search || action === Action.Segment || action === Action.Folder || action === Action.Tag || action === Action.Command;
-}
-
-export function isFolderChangeAction(action: Action): boolean {
-    return action === Action.Folder || action === Action.Segment;
-}
-
-export function isUiChangeAction(action: Action): boolean {
-    return action === Action.Show || action === Action.Sort;
-}
-
-export function isNoneAction(action: Action): boolean {
-    return action === Action.None;
-}
+import { Action, ActionFunc, DEFAULT_FILTER_VALUE, EMPTY_STRING, Segment, Checkbox, Command } from './Lib';
 
 export class Filter {
-    private _searchText: string;
-    private _segment: SegmentKey;
-    private _action: Action;
-    private _tags: string[];
-    private _folderPath: string;
-
-    private _showAttachment: boolean;
-    private _showMd: boolean;
-    private _showFolder: boolean;
-    private _showAmount: boolean;
-    private _sortAccending: boolean;
-    private _sortKey: string;
-
-    private _refresh: boolean;
+    private _searchText: string = DEFAULT_FILTER_VALUE.searchText; //todo: 可能會有 search field 等等
+    private _segment: Segment = DEFAULT_FILTER_VALUE.segment;
+    private _action: Action = DEFAULT_FILTER_VALUE.action;
+    private _command: Command = DEFAULT_FILTER_VALUE.command;
+    private _tags: Set<string> = DEFAULT_FILTER_VALUE.tags;
+    private _path: string = DEFAULT_FILTER_VALUE.path;
+    private _showAttachment: boolean = DEFAULT_FILTER_VALUE.showAttachment;
+    private _showMd: boolean = DEFAULT_FILTER_VALUE.showMd;
+    private _showFolder: boolean = DEFAULT_FILTER_VALUE.showFolder;
+    private _showAmount: boolean = DEFAULT_FILTER_VALUE.showAmount;
+    private _sortAccending: boolean = DEFAULT_FILTER_VALUE.sortAccending;
+    private _property: string = DEFAULT_FILTER_VALUE.property;
 
     get searchText(): string {
         return this._searchText;
@@ -55,11 +23,11 @@ export class Filter {
         this._action = Action.Search;
     }
 
-    get segment(): SegmentKey {
+    get segment(): Segment {
         return this._segment;
     }
 
-    set segment(value: SegmentKey) {
+    set segment(value: Segment) {
         this._segment = value;
         this._action = Action.Segment;
     }
@@ -67,26 +35,35 @@ export class Filter {
     get action(): Action {
         return this._action;
     }
-    
+
     set action(value: Action) {
         this._action = value;
     }
 
-    get tags(): string[] {
+    get command(): Command {
+        return this._command;
+    }
+
+    set command(value: Command) {
+        this._command = value;
+        this._action = Action.Command;
+    }
+
+    get tags(): Set<string> {
         return this._tags;
     }
-    
-    set tags(value: string[]) {
-        this._tags = value;
+
+    set tags(value: string[] | Set<string>) {
+        this._tags = value instanceof Set ? value : new Set(value);
         this._action = Action.Tag;
     }
 
-    get folderPath(): string {
-        return this._folderPath;
+    get path(): string {
+        return this._path;
     }
 
-    set folderPath(value: string) {
-        this._folderPath = value;
+    set path(value: string) {
+        this._path = value;
         this._action = Action.Folder;
     }
 
@@ -94,154 +71,100 @@ export class Filter {
         return this._showAttachment;
     }
 
-    set showAttachment(value: boolean) {
-        this._showAttachment = value;
-        this._action = Action.Show;
-    }
-
     get showMdAndCanvas(): boolean {
         return this._showMd;
-    }
-
-    set showMdAndCanvas(value: boolean) {
-        this._showMd = value;
-        this._action = Action.Show;
     }
 
     get showFolder(): boolean {
         return this._showFolder;
     }
 
-    set showFolder(value: boolean) {
-        this._showFolder = value;
-        this._action = Action.Show;
-    }
-
     get showAmount(): boolean {
         return this._showAmount;
-    }
-
-    set showAmount(value: boolean) {
-        this._showAmount = value;
-        this._action = Action.Show;
     }
 
     get sortAccending(): boolean {
         return this._sortAccending;
     }
 
-    set sortAccending(value: boolean) {
-        this._sortAccending = value;
-        this._action = Action.Sort;
+    get property(): string {
+        return this._property;
     }
 
-    get sortKey(): string {
-        return this._sortKey;
-    }
-
-    set sortKey(value: string) {
-        this._sortKey = value;
-        this._action = Action.Sort;
-    }
-
-    get refresh(): boolean {
-        return this._refresh;
-    }
-
-    set refresh(value: boolean) {
-        this._refresh = value;
-    }
-
-    constructor(segment: SegmentKey, action: Action) {
+    constructor(segment: Segment, action: Action, command: Command = Command.Undefined) {
         this._segment = segment;
         this._action = action;
-        this._searchText = "";
-        this._tags = [];
-        this._folderPath = ROOT_FOLDER_PATH;
-        this._showAttachment = true;
-        this._showMd = true;
-        this._showFolder = true;
-        this._showAmount = false;
-        this._sortAccending = true;
-        this._sortKey = 'name';
-        this._refresh = false;
+        this._command = command;
     }
 
-    public createNewCopy(): Filter {
-        let newFilter = new Filter(this._segment, this._action);
-        newFilter._searchText = this._searchText;
-        newFilter._tags = this._tags;
-        newFilter._folderPath = this._folderPath;
-        newFilter._showAttachment = this._showAttachment;
-        newFilter._showMd = this._showMd;
-        newFilter._showFolder = this._showFolder;
-        newFilter._showAmount = this._showAmount;
-        newFilter._sortAccending = this._sortAccending;
-        newFilter._sortKey = this._sortKey;
-        newFilter._refresh = this._refresh;
-        return newFilter;
-    }
-
-    public copyValue(filter: Filter) {
+    public static DefaultFilter = () => new Filter(Segment.Vault, Action.Segment);
+    public static UndefinedFilter = () => new Filter(Segment.None, Action.Undfined);
+    public static CommandFilter = (command: Command) => new Filter(Segment.None, Action.Command, command);
+    
+    public copyValueFrom(filter: Filter) {
         this._segment = filter._segment;
         this._action = filter._action;
         this._searchText = filter._searchText;
         this._tags = filter._tags;
-        this._folderPath = filter._folderPath;
+        this._path = filter._path;
         this._showAttachment = filter._showAttachment;
         this._showMd = filter._showMd;
         this._showFolder = filter._showFolder;
         this._showAmount = filter._showAmount;
         this._sortAccending = filter._sortAccending;
-        this._sortKey = filter._sortKey;
-        this._refresh = filter._refresh;
+        this._property = filter._property;
     }
 
-    public isSearchTextEmptyOrUndefined(): boolean {
-        return this._searchText === undefined || this._searchText === '';
+    public isSearchTextEmpty(): boolean {
+        return this._searchText === EMPTY_STRING;
     }
 
-    public filterEquality(filter: Filter): boolean {
-        if (isUiChangeAction(this._action)) return true;
+    public equal(filter: Filter): boolean {
+        if (ActionFunc.isFileMapNotNeedUpdate(this._action)) return true;
 
-        if (this._action !== filter._action) return false;
-        if (this._searchText !== filter._searchText) return false;
-        if (this._segment !== filter._segment) return false;
-        if (this._tags?.length !== filter._tags?.length) return false;
-        if (this._tags?.some((tag, index) => tag !== filter._tags![index])) return false;
-        if (this._folderPath !== filter._folderPath) return false;
+        if (this._action !== filter._action ||
+            this._searchText !== filter._searchText ||
+            this._segment !== filter._segment ||
+            this._path !== filter._path) {
+            return false;
+        }
+
+        if (this._tags.size !== filter._tags.size) return false;
+
+        for (let tag of this._tags) {
+            if (!filter._tags.has(tag)) return false;
+        }
 
         return true;
     }
 
-    public toggleCheckbox(checkboxKey: CheckboxKey) {
+    public toggleCheckbox(checkboxKey: Checkbox) {
         switch (checkboxKey) {
-            case CheckboxKey.ShowAttachments:
+            case Checkbox.ShowAttachments:
                 this._showAttachment = !this._showAttachment;
                 break;
-            case CheckboxKey.ShowMd:
+            case Checkbox.ShowMd:
                 this._showMd = !this._showMd;
                 break;
-            case CheckboxKey.ShowFolder:
+            case Checkbox.ShowFolder:
                 this._showFolder = !this._showFolder;
                 break;
-            case CheckboxKey.ShowAmount:
+            case Checkbox.ShowAmount:
                 this._showAmount = !this._showAmount;
                 break;
         }
         this._action = Action.Show;
     }
 
-    public toggleSortOrder(sortKey: string) {
-        if (this._sortKey === sortKey) {
+    public togglePropertyOrder(property: string) {
+        if (this._property === property) {
             this._sortAccending = !this._sortAccending;
         } else {
-            this._sortKey = sortKey;
+            this._property = property;
             this._sortAccending = true;
         }
         this._action = Action.Sort;
     }
 }
-export const defaultFileFilter = new Filter(SegmentKey.Vault, Action.Segment);
-export const noneFileFilter = new Filter(SegmentKey.None, Action.None);
+
 

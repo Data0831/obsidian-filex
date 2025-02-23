@@ -1,273 +1,88 @@
-import { Notice, TFile, TFolder, getAllTags } from 'obsidian';
-import { ItemView } from 'obsidian';
-import { Filter, Action, noneFileFilter } from './Filter';
-import * as YAML from 'yaml';
-import { SegmentKey } from './FileXHtml';
-import { Debug } from './Lib';
+import { TFile, TFolder, App } from "obsidian";
+import { NO_TAG } from "./Lib";
 
-export interface FileAndFolder {
+export interface TabstractFileMap {
     files: TFile[];
     folders: TFolder[];
 }
 
-export interface FileAndFolderCounter {
-    folderCount: number;
-    mdFileCount: number;
-    canvaFileCount: number;
-    attachmentFileCount: number;
-}
+export const FileExtensions = {
+    md: 'md',
+    canvas: 'canvas'
+};
 
 export class FileAPI {
-    private oldFilter: Filter = noneFileFilter.createNewCopy();
-    public fileAndFolder: FileAndFolder = { files: [], folders: [] };
-    private tagsFiles: Record<string, TFile[]> = {};
-    
-    constructor(private view: ItemView) { }
+    public static checkFileExtension(file: TFile, ext: string): boolean { return file.extension === ext; }
+    public static isMdExtension = (file: TFile): boolean => this.checkFileExtension(file, FileExtensions.md);
+    public static isCanvasExtension = (file: TFile): boolean => this.checkFileExtension(file, FileExtensions.canvas);
+    public static isObExtension = (file: TFile): boolean => this.isMdExtension(file) || this.isCanvasExtension(file);
 
-    private get fileExtensions() {
-        return {
-            md: 'md',
-            canvas: 'canvas'
-        };
-    }
-
-    private checkFileExtension(file: TFile, ext: string): boolean {
-        return file.extension === ext;
-    }
-
-    isMdExtension = (file: TFile): boolean => this.checkFileExtension(file, this.fileExtensions.md);
-    isCanvaExtension = (file: TFile): boolean => this.checkFileExtension(file, this.fileExtensions.canvas);
-    isObExtension = (file: TFile): boolean => this.isMdExtension(file) || this.isCanvaExtension(file);
-
-    getUnlinkedFiles(): TFile[] {
-        const attachments = this.view.app.vault.getFiles().filter(file => !this.isObExtension(file));
-        const allLinks = new Set<string>();
-        
-        this.view.app.vault.getMarkdownFiles().forEach(mdFile => {
-            const cache = this.view.app.metadataCache.getFileCache(mdFile);
-            if (cache) {
-                cache.embeds?.forEach(embed => allLinks.add(embed.link));
-                cache.links?.forEach(link => allLinks.add(link.link));
-            }
-        });
-
-        Debug.log("allLinks", allLinks);
-        return attachments.filter(file => 
-            !Array.from(allLinks).some(link => 
-                link.includes(file.basename) || link.includes(file.path)
-            )
-        );
-    }
-
-    showFilter(filter: Filter): FileAndFolder {
-        const result: FileAndFolder = { 
-            files: [], 
-            folders: filter.showFolder ? this.sortFolder(this.fileAndFolder.folders) : [] 
-        };
-
-        result.files = this.fileAndFolder.files.filter(file => 
-            (filter.showMdAndCanvas && this.isObExtension(file)) ||
-            (filter.showAttachment && !this.isObExtension(file))
-        );
-
-        result.files = this.sortFile(result.files);
-        return result;
-    }
-
-    getFileAndFolderByFilter(filter: Filter): FileAndFolder {
-        Debug.log(filter);
-        if (!filter.refresh && filter.filterEquality(this.oldFilter)) {
-            Debug.log("filter 相同");
-            return this.showFilter(filter);
-        }
-        
-        filter.refresh = false;
-        this.oldFilter.copyValue(filter);
-        this.fileAndFolder = { files: [], folders: [] };
-
-        switch (filter.action) {
-            case Action.Search:
-                this.handleSearchAction(filter);
-                break;
-            case Action.Segment:
-                this.handleSegmentAction(filter);
-                break;
-            case Action.Folder:
-                this.handleFolderAction(filter);
-                break;
-            case Action.Tag:
-                this.fileAndFolder.files = this.tagsFiles[filter.tags[0]] || [];
-                break;
-        }
-
-        return this.showFilter(filter);
-    }
-
-    private handleSearchAction(filter: Filter) {
-        const searchText = filter.searchText!.toLowerCase();
-        this.fileAndFolder.files = this.view.app.vault.getFiles()
-            .filter(file => file.name.toLowerCase().includes(searchText));
-        this.fileAndFolder.folders = this.view.app.vault.getAllFolders()
-            .filter(folder => folder.name.toLowerCase().includes(searchText));
-    }
-
-    private handleSegmentAction(filter: Filter) {
-        switch (filter.segment) {
-            case SegmentKey.Vault:
-                const rootFolder = this.view.app.vault.getRoot();
-                this.fileAndFolder = {
-                    folders: rootFolder.children.filter(folder => folder instanceof TFolder),
-                    files: rootFolder.children.filter(file => file instanceof TFile)
-                };
-                break;
-            case SegmentKey.FolderL2:
-                this.fileAndFolder.folders = this.view.app.vault.getAllFolders()
-                    .filter(folder => folder.path.split('/').length == 2);
-                break;
-            case SegmentKey.AllFiles:
-                this.fileAndFolder.files = this.view.app.vault.getFiles();
-                break;
-            case SegmentKey.UnLinked:
-                this.fileAndFolder.files = this.getUnlinkedFiles();
-                break;
-            case SegmentKey.Tag:
-                this.getAllTagNames();
-                break;
-        }
-    }
-
-    private handleFolderAction(filter: Filter) {
-        const folder = this.getTFolderByPath(filter.folderPath!);
-        if (folder) {
-            this.fileAndFolder = {
-                files: folder.children.filter(file => file instanceof TFile),
-                folders: folder.children.filter(folder => folder instanceof TFolder)
-            };
-        }
-    }
-
-    public async saveFileFrontmatter(file: TFile, map: Record<string, any>) {
-        try {
-            const content = await this.view.app.vault.read(file);
-            const frontmatter = this.view.app.metadataCache.getFileCache(file)?.frontmatter;
-
-            if (frontmatter) {
-                Object.assign(frontmatter, map);
-                const newFrontmatterStr = YAML.stringify(frontmatter);
-                const newContent = content.replace(/^---\n([\s\S]*?)\n---/, `---\n${newFrontmatterStr}---`);
-                await this.view.app.vault.modify(file, newContent);
-                new Notice(`檔案 ${file.basename} 的 frontmatter 已更新`);
-            } else {
-                const newFrontmatter = YAML.stringify(map);
-                const newContent = `---\n${newFrontmatter}---\n\n${content}`;
-                await this.view.app.vault.modify(file, newContent);
-                new Notice(`檔案 ${file.basename} 添加新的 frontmatter`);
-            }
-        } catch (error) {
-            new Notice(`更新 frontmatter 失敗: ${error.message}`);
-            console.error('Error updating frontmatter:', error);
-        }
-    }
-    
-    public calculateFileCountInFolder(folder: TFolder): FileAndFolderCounter {
-        const count: FileAndFolderCounter = { folderCount: 0, mdFileCount: 0, canvaFileCount: 0, attachmentFileCount: 0 };
-        folder.children.forEach(child => {
-            if (child instanceof TFile) {
-                if (this.isMdExtension(child)) {
-                    count.mdFileCount++;
-                } else if (this.isCanvaExtension(child)) {
-                    count.canvaFileCount++;
-                } else {
-                    count.attachmentFileCount++;
-                }
-            }
-        });
-        return count;
-    }
-
-    public getTotalFileCount(): FileAndFolderCounter {
-        const count: FileAndFolderCounter = { folderCount: 0, mdFileCount: 0, canvaFileCount: 0, attachmentFileCount: 0 };
-        this.view.app.vault.getFiles().forEach(file => {
-            if (this.isMdExtension(file)) {
-                count.mdFileCount++;
-            } else if (this.isCanvaExtension(file)) {
-                count.canvaFileCount++;
-            } else {
-                count.attachmentFileCount++;
-            }
-        });
-        return count;
-    }
-
-    public getTagFileCount(tagName: string): number {
-        return this.tagsFiles[tagName]?.length || 0;
-    }
-
-    getAllTagNames(): string[] {
-        this.tagsFiles = { '|no-tag': [] };
-  
-        this.view.app.vault.getMarkdownFiles().forEach(file => {
-            const cache = this.view.app.metadataCache.getFileCache(file);
-            if (cache) {
-                const tags = getAllTags(cache);
-                if (tags) {
-                    for (const tag of tags) {
-                        this.tagsFiles[tag] = this.tagsFiles[tag] || [];
-                        this.tagsFiles[tag].push(file);
-                    }
-                } else {
-                    this.tagsFiles['|no-tag'].push(file);
-                }
-            }
-        });
-        return this.sortTags(Object.keys(this.tagsFiles));
-    }
-
-    getRootFolder = (): TFolder => this.view.app.vault.getRoot();
-
-    getMdFilesByFolderPath = (folderPath: string): TFile[] => 
-        this.view.app.vault.getMarkdownFiles().filter(file => file.path.startsWith(folderPath));
-
-    getTFolderByPath = (folderPath: string): TFolder | null => 
-        this.view.app.vault.getFolderByPath(folderPath);
-
-    private sortByAlphabet = (a: string, b: string): number => {
+    private static sortByAlphabet = (a: string, b: string): number => {
         const isALetter = a[0].match(/[a-zA-Z]/);
         const isBLetter = b[0].match(/[a-zA-Z]/);
-        
+
         if (isALetter && !isBLetter) return 1;
         if (!isALetter && isBLetter) return -1;
         return a.localeCompare(b);
     }
 
-    sortTags(tags: string[]): string[] {
+    public static sortTags(tags: string[]): string[] {
         return tags.sort((a, b) => {
-            if (a === '|no-tag') return 1;
-            if (b === '|no-tag') return -1;
+            if (a === NO_TAG) return 1;
+            if (b === NO_TAG) return -1;
             if (a.length !== b.length) return a.length - b.length;
             return this.sortByAlphabet(a, b);
         });
     }
 
-    sortFolder(folders: TFolder[]): TFolder[] {
+    public static sortFolder(folders: TFolder[]): TFolder[] {
         return folders.sort((a, b) => this.sortByAlphabet(a.name, b.name));
     }
 
-    sortFile(files: TFile[]): TFile[] {
+    public static sortFile(files: TFile[]): TFile[] {
         return files.sort((a, b) => {
             if (this.isMdExtension(a) !== this.isMdExtension(b)) {
                 return this.isMdExtension(a) ? -1 : 1;
             }
-            if (this.isCanvaExtension(a) !== this.isCanvaExtension(b)) {
-                return this.isCanvaExtension(a) ? -1 : 1;
+            if (this.isCanvasExtension(a) !== this.isCanvasExtension(b)) {
+                return this.isCanvasExtension(a) ? -1 : 1;
             }
             if (a.extension !== b.extension) {
                 return a.extension.localeCompare(b.extension);
             }
             return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
         });
+
+    }
+
+    public static sortFileByProperty(files: TFile[], property: string, app: App): TFile[] {
+        return files.sort((a, b) => {
+            const cache = app.metadataCache;
+            const frontmatterA = cache.getFileCache(a)?.frontmatter?.[property];
+            const frontmatterB = cache.getFileCache(b)?.frontmatter?.[property];
+
+            // 如果兩個檔案都沒有指定的 frontmatter 屬性，則按名稱排序
+            if (!frontmatterA && !frontmatterB) {
+                return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+            }
+
+            // 如果只有一個檔案有 frontmatter 屬性，將有屬性的排在前面
+            if (!frontmatterA) return 1;
+            if (!frontmatterB) return -1;
+
+            // 根據屬性類型進行排序
+            if (typeof frontmatterA === 'string' && typeof frontmatterB === 'string') {
+                return frontmatterA.toLowerCase().localeCompare(frontmatterB.toLowerCase());
+            }
+            if (typeof frontmatterA === 'number' && typeof frontmatterB === 'number') {
+                return frontmatterA - frontmatterB;
+            }
+            if (frontmatterA instanceof Date && frontmatterB instanceof Date) {
+                return frontmatterA.getTime() - frontmatterB.getTime();
+            }
+
+            // 其他情況按名稱排序
+            return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+        });
     }
 }
-
-
-

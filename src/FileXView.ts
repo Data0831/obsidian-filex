@@ -1,48 +1,31 @@
 import { ItemView, setIcon, WorkspaceLeaf, TFile, TFolder, Notice, TAbstractFile } from 'obsidian';
-import { FileAPI, FileAndFolder, FileAndFolderCounter } from './FileAPI';
+import { TabstractFileMapHandler } from './TabstractFileMapHandler';
 import FileXPlugin from '../main';
-import { Action, Filter, defaultFileFilter, isFolderChangeAction } from './Filter';
+import { Filter } from './Filter';
 import { FileXMenu } from './FileXMenu';
-import { FileXHtmlBuilder, SegmentKey, CheckboxKey } from './FileXHtml';
-import { Debug, ROOT_FOLDER_PATH, debounce } from './Lib';
+import { FileXHtmlBuilder } from './FileXHtml';
+import { TabstractFileMap, FileAPI } from './FileAPI';
+import { Debug, ROOT_FOLDER_PATH, debounce, Action, ActionFunc, Segment, Checkbox, DomCache, VIEW_TYPE_FILEX, VIEW_NAME_FILEX } from './Lib';
 
-export const VIEW_TYPE_FILEX = 'filex-control';
-export interface DomCache {
-    contentEl: HTMLElement;
-    searchContainer: HTMLElement;
-    widgetContainer: HTMLElement;
-    fileInfoContainer: HTMLElement;
-    tagsContainer: HTMLElement;
-    multiSelectContainer: HTMLElement;
-    tbody: HTMLElement;
-    headerTr: HTMLElement;
-    folderPathContainer: HTMLElement;
-    fileCount: HTMLElement;
-}
+
 
 export class FileXView extends ItemView {
-    private fileAPI: FileAPI;
+    private tabstractFileMapHandler: TabstractFileMapHandler;
     private plugin: FileXPlugin;
     private properties: string[];
-    public filter: Filter = defaultFileFilter.createNewCopy();
     private menu: FileXMenu;
     private domCache: DomCache;
     private countRunnigStatus: boolean = false;
-    private totalFileCount: FileAndFolderCounter = {
-        folderCount: 0,
-        mdFileCount: 0,
-        canvaFileCount: 0,
-        attachmentFileCount: 0
-    };
-    private fileAndFolder: FileAndFolder;
-
-
-
+    private result: TabstractFileMap;
+    private vaultFileCount: number;
+    public filter: Filter = Filter.DefaultFilter();
+    
     constructor(leaf: WorkspaceLeaf, plugin: FileXPlugin) {
         super(leaf);
-        this.fileAPI = new FileAPI(this);
+        this.tabstractFileMapHandler = TabstractFileMapHandler.getInstance(this.app);
         this.plugin = plugin;
         this.menu = new FileXMenu(this);
+        this.vaultFileCount = TabstractFileMapHandler.calculateVaultFileCount(this.app);
         this.initProperties();
     }
 
@@ -57,7 +40,7 @@ export class FileXView extends ItemView {
     }
 
     getDisplayText() {
-        return 'FileX Control';
+        return VIEW_NAME_FILEX;
     }
 
     getIcon() {
@@ -68,9 +51,13 @@ export class FileXView extends ItemView {
         this.removeEventListeners();
     }
 
-    public refresh(setRefresh: boolean = false) {
-        this.filter.refresh = setRefresh;
+    public propertyUpdate(){
         this.initProperties();
+        this.buildTable();
+    }
+
+    public refresh(setRefresh: boolean = false) {
+        (setRefresh) ? this.filter.action = Action.Refresh : null;
         this.buildTable();
     }
 
@@ -120,7 +107,6 @@ export class FileXView extends ItemView {
         this.setHtmlAndInitDomCache();
         this.setHtmlIcon();
         this.initListeners();
-        this.totalFileCount = this.fileAPI.getTotalFileCount();
         this.buildTable();
     }
 
@@ -137,14 +123,14 @@ export class FileXView extends ItemView {
             this.addEventListenerWithCleanup(searchInput, 'input', debouncedSearch);
         }
 
-        const segmentClickHandler = (segmentKey: SegmentKey) => {
-            (segmentKey !== SegmentKey.Tag) ? this.domCache.tagsContainer.style.display = 'none' : (
+        const segmentClickHandler = (segment: Segment) => {
+            (segment !== Segment.Tag) ? this.domCache.tagsContainer.style.display = 'none' : (
                 this.domCache.tagsContainer.style.display = 'block',
                 this.buildTags()
             );
             this.domCache.widgetContainer.querySelector('.segment-button.active')?.classList.remove('active');
-            this.domCache.widgetContainer.querySelector(`#${segmentKey}`)?.classList.add('active');
-            this.filter.segment = segmentKey;
+            this.domCache.widgetContainer.querySelector(`#${segment}`)?.classList.add('active');
+            this.filter.segment = segment;
             this.filter.action = Action.Segment;
             this.buildTable();
         }
@@ -152,28 +138,28 @@ export class FileXView extends ItemView {
         const setSegmentClickHandler = () => {
             this.domCache.widgetContainer.querySelectorAll<HTMLButtonElement>("button.segment-button").forEach(button => {
                 this.addEventListenerWithCleanup(button, 'click',
-                    () => segmentClickHandler(button.id as SegmentKey));
+                    () => segmentClickHandler(button.id as Segment));
             });
         }
 
-        const checkBoxClickHandler = (checkboxKey: CheckboxKey) => {
+        const checkBoxClickHandler = (checkboxKey: Checkbox) => {
             this.filter.toggleCheckbox(checkboxKey);
             this.filter.action = Action.Show;
-            (checkboxKey === CheckboxKey.ShowAmount && this.filter.showAmount && this.filter.action === Action.Show) ? this.buildTags() : this.buildTags() ;
+            (checkboxKey === Checkbox.ShowAmount && this.filter.showAmount && this.filter.action === Action.Show) ? this.buildTags() : this.buildTags();
             this.buildTable();
         }
 
         const setCheckBoxClickHandler = () => {
             this.domCache.widgetContainer.querySelectorAll<HTMLInputElement>("input.option-checkbox").forEach(checkbox => {
                 this.addEventListenerWithCleanup(checkbox, 'click',
-                    () => checkBoxClickHandler(checkbox.id as CheckboxKey));
+                    () => checkBoxClickHandler(checkbox.id as Checkbox));
             });
         }
 
         const setRootFolderClickHandler = () => {
             const folderIcon = this.domCache.fileInfoContainer.querySelector('span.filex-icon-folder')!;
             this.addEventListenerWithCleanup(folderIcon as HTMLElement, 'click',
-                () => segmentClickHandler(SegmentKey.Vault));
+                () => segmentClickHandler(Segment.Vault));
             this.addEventListenerWithCleanup(folderIcon as HTMLElement, 'contextmenu',
                 (e) => this.showFileMenuByPath(e as MouseEvent, ROOT_FOLDER_PATH));
         }
@@ -183,7 +169,7 @@ export class FileXView extends ItemView {
                 th.removeClass('sort-asc', 'sort-desc');
             });
             this.filter.action = Action.Sort;
-            this.filter.toggleSortOrder(th.textContent!);
+            this.filter.togglePropertyOrder(th.textContent!);
             th.addClass(this.filter.sortAccending ? 'sort-asc' : 'sort-desc');
             this.buildTable();
         }
@@ -220,7 +206,7 @@ export class FileXView extends ItemView {
                 if (event.target instanceof HTMLElement) {
                     const tagSpan = event.target.closest('.tag-span');
                     if (tagSpan instanceof HTMLElement) {
-                        this.filter.tags = [tagSpan.textContent!];
+                        this.filter.tags = new Set([tagSpan.textContent!]);
                         this.buildTable();
 
                         const multiSelectContainer = this.domCache.multiSelectContainer;
@@ -258,12 +244,12 @@ export class FileXView extends ItemView {
     }
 
     private showFileMenuByPath(e: MouseEvent, path: string) {
-        const file = this.fileAPI.getTFolderByPath(path);
-        if (file) {
-            return this.menu.showMenu(e, file);
+        const folder = this.app.vault.getFolderByPath(path);
+        if (folder) {
+            return this.menu.showMenu(e, folder);
         }
     }
-        
+
     private showFileMenu(e: MouseEvent, file: TAbstractFile) {
         return this.menu.showMenu(e, file);
     }
@@ -272,13 +258,13 @@ export class FileXView extends ItemView {
         const multiSelectContainer = this.domCache.multiSelectContainer;
         multiSelectContainer.innerHTML = '';
 
-        this.fileAPI.getAllTagNames().forEach(tagName => {
+        this.tabstractFileMapHandler.getAllTagNames(this.app).forEach(tagName => {
             const tagSpan = multiSelectContainer.createEl('div', { cls: 'multi-select-pill tag-span' })
                 .createEl('div', { cls: 'multi-select-pill-content' });
             tagSpan.createEl('span', { text: tagName });
 
             if (this.filter.showAmount) {
-                tagSpan.createEl('span', { text: `(${this.fileAPI.getTagFileCount(tagName)})` });
+                tagSpan.createEl('span', { text: `(${this.tabstractFileMapHandler.getTagFileCount(tagName)})` });
             }
         });
     }
@@ -288,7 +274,7 @@ export class FileXView extends ItemView {
             const a = tr.createEl('td').createEl('a', { href: '#', cls: 'file-link' });
             setIcon(a, 'file');
             a.createEl('span', { text: file.name });
-            
+
             tr.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
                 this.showFileMenu(e, file);
@@ -308,7 +294,7 @@ export class FileXView extends ItemView {
                 }
             });
 
-            if (!this.fileAPI.isMdExtension(file)) {
+            if (!FileAPI.isMdExtension(file)) {
                 this.properties.forEach(() => tr.createEl('td'));
                 return;
             }
@@ -327,7 +313,7 @@ export class FileXView extends ItemView {
                         const oldValue = fileCache?.frontmatter?.[property] || '';
 
                         if (newValue !== oldValue) {
-                            await this.fileAPI.saveFileFrontmatter(file, {
+                            await TabstractFileMapHandler.saveFileFrontmatter(this.app, file, {
                                 [property]: newValue
                             });
                         }
@@ -347,8 +333,7 @@ export class FileXView extends ItemView {
             });
 
             if (this.filter.showAmount) {
-                const fileAndFolderCounter: FileAndFolderCounter = this.fileAPI.calculateFileCountInFolder(folder);
-                const fileCount = fileAndFolderCounter.mdFileCount + fileAndFolderCounter.canvaFileCount + fileAndFolderCounter.attachmentFileCount;
+                const fileCount: number = TabstractFileMapHandler.calculateFolderFileCount(folder);
                 if (fileCount > 0) {
                     nameSpan.createEl('span', {
                         text: ` (${fileCount})`,
@@ -358,22 +343,22 @@ export class FileXView extends ItemView {
             }
 
             a.addEventListener('click', () => {
-                this.filter.folderPath = folder.path;
+                this.filter.path = folder.path;
                 this.filter.action = Action.Folder;
                 this.buildTable();
             });
             this.properties.forEach(() => tr.createEl('td'));
         }
         const fragment = document.createDocumentFragment();
-        this.fileAndFolder = this.fileAPI.getFileAndFolderByFilter(this.filter);
+        this.result = this.tabstractFileMapHandler.queryByFilter(this.filter);
 
-        this.fileAndFolder.folders.forEach(folder => {
+        this.result.folders.forEach((folder: TFolder) => {
             const tr = document.createElement('tr');
             createFolderRow(tr, folder);
             fragment.appendChild(tr);
         });
 
-        this.fileAndFolder.files.forEach(file => {
+        this.result.files.forEach((file: TFile) => {
             const tr = document.createElement('tr');
             createFileRow(tr, file);
             fragment.appendChild(tr);
@@ -398,21 +383,17 @@ export class FileXView extends ItemView {
 
         const fileCountSpan = this.domCache.fileCount;
         fileCountSpan.innerHTML = '';
-        let fileCount = 0;
-        let visibleCount = this.fileAndFolder.files.length;
-        (this.filter.showMdAndCanvas) ? fileCount += this.totalFileCount.mdFileCount + this.totalFileCount.canvaFileCount : null;
-        (this.filter.showAttachment) ? fileCount += this.totalFileCount.attachmentFileCount : null;
-        fileCountSpan.setText(`${visibleCount} / ${fileCount} files`);
+        fileCountSpan.setText(`${this.result.files.length} / ${this.vaultFileCount} files`);
 
-        if (isFolderChangeAction(this.filter.action)) {
+        if (ActionFunc.isFolderPathNeedUpdate(this.filter.action)) {
             const folderPathContainer = this.domCache.folderPathContainer;
-            if (this.filter.action === Action.Folder || this.filter.segment === SegmentKey.Vault) {
+            if (this.filter.action === Action.Folder || this.filter.segment === Segment.Vault) {
                 folderPathContainer.innerHTML = '';
                 folderPathContainer.createEl('span', { text: " / " });
-                if (this.filter.folderPath == ROOT_FOLDER_PATH) return;
+                if (this.filter.path == ROOT_FOLDER_PATH) return;
 
                 let absolutePath = "";
-                this.filter.folderPath.split(ROOT_FOLDER_PATH).forEach(folderName => {
+                this.filter.path.split(ROOT_FOLDER_PATH).forEach(folderName => {
                     absolutePath += folderName;
                     let currentAbsolutePath = absolutePath;
 
@@ -422,14 +403,14 @@ export class FileXView extends ItemView {
                     });
 
                     pathItem.addEventListener('click', () => {
-                        this.filter.folderPath = currentAbsolutePath;
+                        this.filter.path = currentAbsolutePath;
                         this.filter.action = Action.Folder;
                         this.buildTable();
                     });
 
                     pathItem.addEventListener('contextmenu', (e) => {
                         e.preventDefault();
-                        const folder = this.fileAPI.getTFolderByPath(currentAbsolutePath);
+                        const folder = this.app.vault.getFolderByPath(currentAbsolutePath);
                         if (folder) {
                             this.showFileMenu(e, folder);
                         }
@@ -438,10 +419,10 @@ export class FileXView extends ItemView {
                     folderPathContainer.createEl('span', { text: " / " });
                     absolutePath += "/";
                 });
-            } else if (this.filter.segment === SegmentKey.Tag) {
+            } else if (this.filter.segment === Segment.Tag) {
                 folderPathContainer.innerHTML = '';
-                if (this.filter.tags && this.filter.tags.length > 0) {
-                    const tagName = this.filter.tags[0];
+                if (this.filter.tags && this.filter.tags.size > 0) {
+                    const tagName = Array.from(this.filter.tags)[0];
                     folderPathContainer.createEl('span', {
                         text: tagName,
                         cls: 'tag-path-item'

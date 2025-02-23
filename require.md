@@ -1,14 +1,17 @@
 # 需修正
 - bug
-    - delete 操作讓 filter 沒有變化，所以 refresh 沒有反應
 - file
     - file query api, file sort api
+    - 正序、倒序
 - menu
     - 默認 file menu 增加一項 show file in Filex 可以開啟 filex 視圖，快速跳轉
     - 觸發時用 notice 提示
-    - 觸發的 modal 顯示路徑
-        - 讓其可以在 attachment 那裡使用
+    - 觸發的 modal 顯示路徑可以在 attachment 那裡使用
+    - 新增檔案後，直接開啟 md 檔案
 - eventListener 統一化
+- 將 show md, canvas 的按鈕分開
+- select option 可以選擇模式
+- 從其他地方跳轉過來的時候，觸發 refresh
 - 編輯模式 新增詳細的 notice
 - 按鈕
     - 將所有檔案（附件）移至同一資料夾 的按鈕
@@ -16,7 +19,17 @@
 - 根據擴展名增加更多圖示
 - tags-container 高度固定，使用 overflow-y: auto
 - 渲染 file-list 的數量限制為 100
+- blocked mode，根據不同情況，禁止某些操作
+    - 當前為 unlinked segment 時，禁止 show 操作
+- style
+    - checkbox style 美化
+    - search bar 一動
+    - td width 調大, height 設定 min-height
 - 考慮增加
     - 勾選模式，選擇多數檔案，可進行 刪除、移動等動作
     - reorder 模式，含可以去掉前綴比如 ele 01name ele 02name 這樣的檔案
     - 新增一個 view 替代掉現有的 file 管理
+    - ctrl hover 功能
+    - 可以選擇多個 tags 操作
+
+

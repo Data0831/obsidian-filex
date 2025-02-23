@@ -1,32 +1,19 @@
-export enum SegmentKey {
-    Vault = 'vault',
-    FolderL2 = 'folder-l2',
-    AllFiles = 'all-files',
-    UnLinked = 'unlinked',
-    Tag = 'tag',
-    None = 'none'
-}
+import { Segment, Checkbox } from "./Lib";
 
-export enum CheckboxKey {
-    ShowAttachments = 'show-attachments',
-    ShowMd = 'show-md',
-    ShowFolder = 'show-folder',
-    ShowAmount = 'show-amount'
-}
 
 const segments = [
-    { id: SegmentKey.Vault, text: 'Vault', active: true },
-    { id: SegmentKey.FolderL2, text: 'Folder L2' },
-    { id: SegmentKey.AllFiles, text: 'All files' },
-    { id: SegmentKey.UnLinked, text: 'Not Linked' },
-    { id: SegmentKey.Tag, text: 'Tag' }
+    { id: Segment.Vault, text: 'Vault', active: true },
+    { id: Segment.FolderL2, text: 'Folder L2' },
+    { id: Segment.AllFiles, text: 'All files' },
+    { id: Segment.UnLinked, text: 'Not Linked' },
+    { id: Segment.Tag, text: 'Tag' }
 ];
 
 const options = [
-    { name: 'show attachments', id: CheckboxKey.ShowAttachments, checked: true },
-    { name: 'show md/canva', id: CheckboxKey.ShowMd, checked: true },
-    { name: 'show folder', id: CheckboxKey.ShowFolder, checked: true },
-    { name: 'show amount', id: CheckboxKey.ShowAmount, checked: false }
+    { name: 'show attachments', id: Checkbox.ShowAttachments, checked: true },
+    { name: 'show md/canva', id: Checkbox.ShowMd, checked: true },
+    { name: 'show folder', id: Checkbox.ShowFolder, checked: true },
+    { name: 'show amount', id: Checkbox.ShowAmount, checked: false }
 ];
 
 export class FileXHtmlBuilder {

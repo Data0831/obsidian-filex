@@ -1,10 +1,7 @@
 3. view class 有 contentEl 屬性，可以存取 view 的 html 元素
 6. Obsidian 在其核心樣式中，會定義一系列以 -- 開頭的 CSS 變數，這些變數可以在 plugin 的 CSS 中使用
 
-7. css box-shadow
 8. css transition
-9. input:focus-visible
-
 10. match(/[a-zA-Z]/)
 11. spilt 與 slice 的用法
 12. 直接將物件傳遞到 onclick 字串中會導致 [object Object] 的問題。
@@ -218,3 +215,48 @@ export type SegmentKey = 'vault' | 'folder-l2' | 'all-files' | 'tag' | 'not-link
 
 .file-list-body a {
             width: fit-content;
+
+debounce 雖然能延遲，但好像沒有改變他的重複觸發性吧，只是延遲了觸發時間
+
+
+在你提供的程式碼中，`Search` 是 `Action` 列舉（enum）中的一個成員。這個列舉的型別是 `Action`，它的定義如下：
+
+```typescript
+export enum Action {
+    Search = 'search',
+    Segment = 'segment',
+    Folder = 'folder',
+    Tag = 'tag',
+    Command = 'command',
+    Show = 'show',
+    Sort = 'sort',
+    None = 'none',
+}
+```
+
+因此，`Search` 的型別是 `Action`，並且它的值是字串 `'search'`。這意味著 `Search` 可以用來表示一個特定的動作，並且在程式中可以用 `Action.Search` 來引用它。
+是的，TypeScript 中的 `enum` 可以不填值。在這種情況下，TypeScript 會自動為每個成員分配一個數字值，從 0 開始遞增。例如：
+
+```typescript
+enum Color {
+    Red,    // 0
+    Green,  // 1
+    Blue    // 2
+}
+```
+
+在這個例子中，`Red` 的值是 0，`Green` 的值是 1，`Blue` 的值是 2。
+
+你也可以混合使用自定義值和自動生成的值。例如：
+
+```typescript
+enum Status {
+    Active = 1, // 1
+    Inactive,   // 2
+    Pending     // 3
+}
+```
+
+在這個例子中，`Active` 被明確設置為 1，然後 `Inactive` 和 `Pending` 將自動分配為 2 和 3。
+
+總結來說，`enum` 的成員可以不填值，TypeScript 會自動為它們分配數字值。
