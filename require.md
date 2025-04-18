@@ -8,6 +8,8 @@
     - 觸發時用 notice 提示
     - 觸發的 modal 顯示路徑可以在 attachment 那裡使用
     - 新增檔案後，直接開啟 md 檔案
+- propertie 去除空格，在輸入時就檢查，如果錯誤則提示且不給更改
+- F5 沒有強制刷新
 - eventListener 統一化
 - 將 show md, canvas 的按鈕分開
 - select option 可以選擇模式

@@ -7,8 +7,6 @@ import { FileXHtmlBuilder } from './FileXHtml';
 import { TabstractFileMap, FileAPI } from './FileAPI';
 import { Debug, ROOT_FOLDER_PATH, debounce, Action, ActionFunc, Segment, Checkbox, DomCache, VIEW_TYPE_FILEX, VIEW_NAME_FILEX } from './Lib';
 
-
-
 export class FileXView extends ItemView {
     private tabstractFileMapHandler: TabstractFileMapHandler;
     private plugin: FileXPlugin;

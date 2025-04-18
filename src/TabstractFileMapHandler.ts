@@ -89,7 +89,7 @@ class TabstractFileHandler {
 }
 
 export class TabstractFileMapHandler extends TabstractFileHandler {
-    private prevFileter: Filter = Filter.UndefinedFilter();
+    private prevFilter: Filter = Filter.UndefinedFilter();
     private fileMap: TabstractFileMap = { files: [], folders: [] };
     private static _instance: TabstractFileMapHandler;
     public static getInstance(app: App): TabstractFileMapHandler {
@@ -113,7 +113,7 @@ export class TabstractFileMapHandler extends TabstractFileHandler {
             this.fileMap.folders = [];
             switch (filter.action) {
                 case Action.Refresh:
-                    filter.action = this.prevFileter.action;
+                    filter.action = this.prevFilter.action;
                 case Action.Search:
                     this.handleSearchAction(filter);
                     break;
@@ -131,7 +131,7 @@ export class TabstractFileMapHandler extends TabstractFileHandler {
                     break;
             }
         }
-        this.prevFileter.copyValueFrom(filter);
+        this.prevFilter.copyValueFrom(filter);
         const result: TabstractFileMap = {
             files: [],
             folders: filter.showFolder ? FileAPI.sortFolder(this.fileMap.folders) : []
